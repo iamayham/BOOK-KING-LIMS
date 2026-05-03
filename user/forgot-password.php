@@ -1,7 +1,6 @@
 <?php
 require_once dirname(__DIR__) . '/helpers/session_bootstrap.php';
 bk_session_start();
-$pdo = require '../database/db_connection.php';
 require_once './email_service.php';
 
 $message = '';
@@ -9,6 +8,15 @@ $messageClass = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Content-Type: application/json; charset=UTF-8');
+
+    try {
+        $pdo = require '../database/db_connection.php';
+    } catch (Throwable $e) {
+        error_log('forgot-password DB bootstrap: ' . $e->getMessage());
+        echo json_encode(['success' => false, 'message' => 'Service is temporarily unavailable. Please try again later.']);
+        exit;
+    }
+
     $email = trim($_POST['email'] ?? '');
     
     if (!empty($email)) {
@@ -61,7 +69,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 echo json_encode(['success' => false, 'message' => 'Email not found']);
                 exit;
             }
-        } catch (PDOException $e) {
+        } catch (Throwable $e) {
+            error_log('forgot-password: ' . $e->getMessage());
             echo json_encode(['success' => false, 'message' => 'Database error']);
             exit;
         }
@@ -137,7 +146,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             });
             clearTimeout(timeoutId);
             
-            const data = await response.json();
+            const raw = await response.text();
+            let data;
+            try {
+                data = JSON.parse(raw);
+            } catch (_) {
+                console.error('Non-JSON response', response.status, raw.slice(0, 500));
+                alert('Server returned an unexpected response (' + response.status + '). Please try again.');
+                return;
+            }
             
             if (data.success) {
                 if (data.fallback && data.message) {
