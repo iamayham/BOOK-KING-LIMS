@@ -1,76 +1,44 @@
 <?php
+declare(strict_types=1);
+
 // database/db_connection.php
+$requiredVars = [
+    'MYSQLHOST',
+    'MYSQLPORT',
+    'MYSQLDATABASE',
+    'MYSQLUSER',
+    'MYSQLPASSWORD',
+];
+
+$config = [];
+foreach ($requiredVars as $varName) {
+    $value = getenv($varName);
+    if ($value === false || trim((string) $value) === '') {
+        throw new RuntimeException('Environment variables not loaded');
+    }
+    $config[$varName] = trim((string) $value);
+}
 
 try {
-    $dbHost = getenv('DB_HOST') ?: getenv('MYSQLHOST') ?: 'localhost';
-    $dbPort = getenv('DB_PORT') ?: getenv('MYSQLPORT') ?: '3306';
-    $dbName = getenv('DB_NAME') ?: getenv('MYSQLDATABASE') ?: getenv('MYSQL_DATABASE') ?: 'lims';
-    $dbUser = getenv('DB_USER') ?: getenv('MYSQLUSER') ?: 'root';
-    $dbPass = getenv('DB_PASS');
-    if ($dbPass === false || $dbPass === '') {
-        $dbPass = getenv('MYSQLPASSWORD');
-    }
-    if ($dbPass === false || $dbPass === '') {
-        $dbPass = getenv('MYSQL_ROOT_PASSWORD');
-    }
-    if ($dbPass === false) {
-        $dbPass = '';
-    }
-
-    $pdoOptions = [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
-    ];
-
-    $isLocalDefaults = $dbHost === 'localhost' && $dbUser === 'root' && $dbName === 'lims';
-    if ($isLocalDefaults) {
-        // Local dev convenience: ensure the database exists.
-        $bootstrapPdo = new PDO(
-            "mysql:host={$dbHost};port={$dbPort};charset=utf8mb4",
-            $dbUser,
-            $dbPass,
-            $pdoOptions
-        );
-        $bootstrapPdo->exec("CREATE DATABASE IF NOT EXISTS `{$dbName}`");
-    }
-
-    // Main app connection (works for Railway and local).
-    $pdo = new PDO(
-        "mysql:host={$dbHost};port={$dbPort};dbname={$dbName};charset=utf8mb4",
-        $dbUser,
-        $dbPass,
-        $pdoOptions
+    $dsn = sprintf(
+        'mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4',
+        $config['MYSQLHOST'],
+        $config['MYSQLPORT'],
+        $config['MYSQLDATABASE']
     );
 
-    // Create admin table if it doesn't exist
-    $pdo->exec("CREATE TABLE IF NOT EXISTS admin (
-        admin_id INT AUTO_INCREMENT PRIMARY KEY,
-        username VARCHAR(50) NOT NULL UNIQUE,
-        password VARCHAR(255) NOT NULL,
-        FirstName VARCHAR(50) NOT NULL,
-        LastName VARCHAR(50) NOT NULL,
-        email VARCHAR(100) NOT NULL,
-        Status ENUM('active', 'deactive') NOT NULL DEFAULT 'active',
-        last_login DATETIME NULL,
-        login_location VARCHAR(255) NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-    
-    // Check if default admin accounts exist
-    $stmt = $pdo->query("SELECT COUNT(*) FROM admin");
-    $count = $stmt->fetchColumn();
-    
-    if ($count == 0) {
-        // Insert default admin accounts with hashed passwords
-        $defaultPassword = password_hash('123', PASSWORD_DEFAULT);
-        $pdo->exec("INSERT INTO admin (username, password, FirstName, LastName, email, Status) VALUES 
-            ('allain', '$defaultPassword', 'Allain', 'User', 'allain@example.com', 'active'),
-            ('ayham', '$defaultPassword', 'Ayham', 'User', 'ayham@example.com', 'active')
-        ");
-    }
-    
+    $pdo = new PDO(
+        $dsn,
+        $config['MYSQLUSER'],
+        $config['MYSQLPASSWORD'],
+        [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]
+    );
+
     return $pdo;
 } catch (PDOException $e) {
     error_log('Database connection failed: ' . $e->getMessage());
-    throw new Exception('Database connection failed. Please check your database configuration.');
+    throw new RuntimeException('Database connection failed. Please check your database configuration.');
 }
