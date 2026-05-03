@@ -21,23 +21,58 @@ class EmailService
     {
         $this->loadDotEnv();
 
-        $this->fromEmail = trim((string) (getenv('MAIL_FROM_EMAIL')
-            ?: getenv('BREVO_FROM_EMAIL')
-            ?: ''));
-
-        $this->fromName = trim((string) (getenv('MAIL_FROM_NAME')
-            ?: getenv('BREVO_FROM_NAME')
-            ?: 'Book King'));
+        $this->fromEmail = $this->envFirst('MAIL_FROM_EMAIL', 'BREVO_FROM_EMAIL');
+        $this->fromName = $this->envFirst('MAIL_FROM_NAME', 'BREVO_FROM_NAME') ?: 'Book King';
 
         if ($this->fromEmail === '') {
             $this->fromEmail = 'noreply@bookking.online';
         }
 
-        $this->brevoSmtpLogin = trim((string) (getenv('BREVO_SMTP_LOGIN') ?: ''));
-        $this->brevoSmtpPassword = trim((string) (getenv('BREVO_SMTP_KEY') ?: getenv('BREVO_SMTP_PASSWORD') ?: ''));
+        $this->brevoSmtpLogin = $this->envFirst('BREVO_SMTP_LOGIN');
+        $this->brevoSmtpPassword = $this->envFirst('BREVO_SMTP_KEY', 'BREVO_SMTP_PASSWORD');
 
-        $this->brevoSmtpHost = trim((string) (getenv('BREVO_SMTP_HOST') ?: 'smtp-relay.brevo.com'));
-        $this->brevoSmtpPort = (int) (getenv('BREVO_SMTP_PORT') ?: 587);
+        $host = $this->envFirst('BREVO_SMTP_HOST');
+        $this->brevoSmtpHost = $host !== '' ? $host : 'smtp-relay.brevo.com';
+        $this->brevoSmtpPort = (int) (($p = $this->envFirst('BREVO_SMTP_PORT')) !== '' ? $p : '587');
+    }
+
+    /** Railway / CLI: prefer real env; getenv() alone is sometimes empty while $_SERVER holds the value. */
+    private function envGet(string $name): string
+    {
+        $v = getenv($name);
+        if (is_string($v) && trim($v) !== '') {
+            return trim($v);
+        }
+        if (isset($_SERVER[$name]) && is_string($_SERVER[$name]) && trim($_SERVER[$name]) !== '') {
+            return trim($_SERVER[$name]);
+        }
+        if (isset($_ENV[$name]) && is_string($_ENV[$name]) && trim($_ENV[$name]) !== '') {
+            return trim($_ENV[$name]);
+        }
+
+        return '';
+    }
+
+    /** First non-empty value among several env keys (same resolution as envGet). */
+    private function envFirst(string ...$names): string
+    {
+        foreach ($names as $n) {
+            $v = $this->envGet($n);
+            if ($v !== '') {
+                return $v;
+            }
+        }
+
+        return '';
+    }
+
+    /** True if the runtime already defines this env name (Railway injection counts), even when empty. */
+    private function envNameIsDefined(string $name): bool
+    {
+        if (getenv($name) !== false) {
+            return true;
+        }
+        return array_key_exists($name, $_SERVER) || array_key_exists($name, $_ENV);
     }
 
     private function loadDotEnv(): void
@@ -69,7 +104,7 @@ class EmailService
             $key = trim(substr($trimmed, 0, $separatorPos));
             $value = trim(substr($trimmed, $separatorPos + 1));
 
-            if ($key === '' || getenv($key) !== false) {
+            if ($key === '' || $this->envNameIsDefined($key)) {
                 continue;
             }
 
@@ -109,11 +144,11 @@ class EmailService
         $this->lastSendError = null;
         $errors = [];
 
-        $apiKey = trim((string) (getenv('BREVO_API_KEY')
-            ?: getenv('BREVO_SMTP_KEY')
-            ?: getenv('BREVO_SMTP_PASSWORD')
-            ?: ''));
-        if ($apiKey !== '') {
+        $apiKeyCandidates = array_values(array_unique(array_filter([
+            $this->envFirst('BREVO_API_KEY', 'BREVO_TRANSACTIONAL_API_KEY', 'BREVO_V3_API_KEY'),
+            $this->envFirst('BREVO_SMTP_KEY', 'BREVO_SMTP_PASSWORD'),
+        ])));
+        foreach ($apiKeyCandidates as $apiKey) {
             if ($this->sendOtpViaBrevoTransactionalApi($recipientEmail, $otp, $apiKey)) {
                 return true;
             }
@@ -128,11 +163,11 @@ class EmailService
         }
 
         if ($errors !== []) {
-            $this->lastSendError = implode(' | ', $errors);
+            $this->lastSendError = implode(' | ', array_values(array_unique($errors)));
             return false;
         }
 
-        $this->lastSendError = 'Mail not configured: set BREVO_API_KEY or BREVO_SMTP_KEY, or BREVO_SMTP_LOGIN + BREVO_SMTP_KEY';
+        $this->lastSendError = 'Mail not configured: set BREVO_API_KEY (recommended) or BREVO_SMTP_LOGIN + BREVO_SMTP_KEY';
         return false;
     }
 
@@ -152,7 +187,7 @@ class EmailService
             return false;
         }
 
-        $endpoint = trim((string) (getenv('BREVO_API_URL') ?: 'https://api.brevo.com/v3/smtp/email'));
+        $endpoint = $this->envFirst('BREVO_API_URL') ?: 'https://api.brevo.com/v3/smtp/email';
         $headerLines = [
             'api-key: ' . $apiKey,
             'Content-Type: application/json',
@@ -170,15 +205,27 @@ class EmailService
                 CURLOPT_POSTFIELDS => $body,
                 CURLOPT_HTTPHEADER => $headerLines,
                 CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT => 20,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_TIMEOUT => 25,
+                CURLOPT_CONNECTTIMEOUT => 12,
             ]);
             $response = curl_exec($ch);
+            $curlErr = curl_error($ch);
             $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
             curl_close($ch);
+
+            if ($response === false && $curlErr !== '') {
+                $this->lastSendError = 'Brevo API network: ' . $curlErr;
+                error_log($this->lastSendError);
+                return false;
+            }
+
             if ($code >= 200 && $code < 300) {
                 return true;
             }
-            $this->lastSendError = 'Brevo API HTTP ' . $code . ($response !== false && $response !== '' ? (': ' . substr((string) $response, 0, 280)) : '');
+
+            $snippet = ($response !== false && $response !== '') ? substr((string) $response, 0, 1500) : '';
+            $this->lastSendError = 'Brevo API HTTP ' . $code . ($snippet !== '' ? (': ' . $snippet) : '');
             error_log($this->lastSendError);
             return false;
         }
