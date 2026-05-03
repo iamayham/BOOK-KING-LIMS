@@ -8,4 +8,4 @@ RUN docker-php-ext-install pdo pdo_mysql
 COPY . /app
 
 # Railway provides PORT at runtime
-CMD ["sh", "-c", "php -S 0.0.0.0:${PORT:-8080} -t /app"]
+CMD ["sh", "-c", "php -d auto_prepend_file=/app/helpers/request_guard.php -S 0.0.0.0:${PORT:-8080} -t /app"]
