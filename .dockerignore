@@ -1,0 +1,6 @@
+.git
+.cursor
+node_modules
+vendor/bin
+storage/sessions/*
+*.log
