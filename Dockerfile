@@ -2,8 +2,10 @@ FROM php:8.2-cli
 
 WORKDIR /app
 
-# Required PHP extensions for this project
-RUN docker-php-ext-install pdo pdo_mysql
+# PDO + MySQL + curl (Brevo transactional API over HTTPS)
+RUN apt-get update && apt-get install -y --no-install-recommends libcurl4-openssl-dev \
+    && docker-php-ext-install pdo pdo_mysql curl \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY . /app
 

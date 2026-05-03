@@ -79,6 +79,8 @@ try {
         exit;
     }
 
+    error_log('forgot-password email send failed: ' . ($emailService->getLastSendError() ?? 'unknown'));
+
     echo json_encode([
         'success' => true,
         'fallback' => true,
