@@ -122,6 +122,9 @@ class EmailService
             $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
             $mail->Port = $this->brevoSmtpPort > 0 ? $this->brevoSmtpPort : 587;
             $mail->CharSet = 'UTF-8';
+            $mail->Timeout = 15;
+            $mail->Timelimit = 20;
+            $mail->SMTPKeepAlive = false;
 
             $mail->setFrom($this->fromEmail, $this->fromName);
             $mail->addAddress($recipientEmail);

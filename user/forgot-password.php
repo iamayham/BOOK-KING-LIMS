@@ -8,6 +8,7 @@ $message = '';
 $messageClass = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json; charset=UTF-8');
     $email = trim($_POST['email'] ?? '');
     
     if (!empty($email)) {
@@ -65,6 +66,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
     }
+
+    echo json_encode(['success' => false, 'message' => 'Email is required']);
+    exit;
 }
 ?>
 <!DOCTYPE html>
@@ -124,10 +128,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         try {
             const formData = new FormData(this);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 20000);
             const response = await fetch('forgot-password.php', {
                 method: 'POST',
-                body: formData
+                body: formData,
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
             
             const data = await response.json();
             
@@ -146,7 +154,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } catch (error) {
             console.error('Error:', error);
-            alert('An error occurred. Please try again.');
+            if (error.name === 'AbortError') {
+                alert('Request timed out. Please try again.');
+            } else {
+                alert('An error occurred. Please try again.');
+            }
         }
     });
     </script>
