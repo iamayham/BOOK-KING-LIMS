@@ -513,3 +513,103 @@ body::-webkit-scrollbar {
         padding: 15px;
     }
 }
+
+/* Dashboard-only tweaks (mobile nav/header/main: user-shell-mobile.css on body.user-app) */
+
+body.user-app.dashboard-page .dashboard-quote-wrapper {
+    flex: 1;
+    margin: 12px 16px 0 20px;
+    max-width: 550px;
+    text-align: center;
+    min-width: 0;
+}
+
+body.user-app.dashboard-page #quoteCarousel.quotes-carousel {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+body.user-app.dashboard-page .quote-text-compact {
+    font-size: clamp(13px, 1.5vw, 16px);
+    line-height: 1.4;
+    margin-bottom: 6px;
+    font-weight: 500;
+    color: #B07154;
+}
+
+body.user-app.dashboard-page .quote-author-compact {
+    font-size: 13px;
+    font-style: italic;
+    color: #d88a52;
+    font-weight: 600;
+}
+
+body.user-app.dashboard-page .dashboard-recommendations-title {
+    margin-bottom: 16px;
+    color: #b07154;
+    font-size: clamp(1.1rem, 4vw, 1.4rem);
+    font-weight: 600;
+}
+
+body.user-app.dashboard-page .popular-books-panel {
+    margin: 20px auto 0;
+    padding: 18px 14px 28px;
+    width: 100%;
+    max-width: 98%;
+    text-align: center;
+    background: #fff;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(176, 113, 84, 0.1);
+}
+
+body.user-app.dashboard-page .popular-books-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+    gap: 12px;
+    padding: 0 4px;
+}
+
+@media (max-width: 768px) {
+    body.user-app.dashboard-page .dashboard-quote-wrapper {
+        display: none;
+    }
+
+    body.user-app.dashboard-page .dashboard-grid {
+        grid-template-columns: 1fr;
+        gap: 14px;
+        padding: 8px 0 0;
+        max-width: 100%;
+    }
+
+    body.user-app.dashboard-page .card-link .card {
+        max-height: none;
+        padding: 16px;
+        border-radius: 14px;
+    }
+
+    body.user-app.dashboard-page .card-content p {
+        -webkit-line-clamp: 3;
+        line-clamp: 3;
+        height: auto;
+        max-height: 4.2em;
+    }
+
+    body.user-app.dashboard-page .popular-books-panel {
+        margin-top: 16px;
+        padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    }
+
+    body.user-app.dashboard-page .popular-books-grid {
+        grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+        gap: 10px;
+    }
+}
+
+@media (max-width: 768px) and (hover: hover) {
+    body.user-app.dashboard-page .card-link:hover .card,
+    body.user-app.dashboard-page .card:hover {
+        transform: translateY(-3px);
+    }
+}

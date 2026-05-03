@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once dirname(__DIR__) . '/helpers/session_bootstrap.php';
+bk_session_start();
 
 // Include the database connection
 $pdo = require '../database/db_connection.php';
@@ -17,6 +18,7 @@ try {
 <html lang="en">
 
 <head>
+    <?php $SITE_ICON_BASE = '../'; require dirname(__DIR__) . '/includes/site_head_icons.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Books view</title>

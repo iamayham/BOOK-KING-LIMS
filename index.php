@@ -1,10 +1,12 @@
 <?php
 // Start output buffering at the very beginning
 ob_start();
-session_start();
+require_once __DIR__ . '/helpers/session_bootstrap.php';
+bk_session_start();
 
 // Include the database connection
 $pdo = require './database/db_connection.php';
+require_once __DIR__ . '/helpers/otp_continuation.php';
 
 // Check for error messages
 $error = $_SESSION['error'] ?? '';
@@ -26,56 +28,103 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
             // Check if the user exists in the database
             $stmt = $pdo->prepare('SELECT * FROM users WHERE username = :username');
             $stmt->execute(['username' => $username]);
-            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            $rawUser = $stmt->fetch(PDO::FETCH_ASSOC);
+            $user = $rawUser !== false ? bk_normalize_user_row($rawUser) : null;
 
             // Verify password using password_verify()
             if ($user && password_verify($password, $user['password'])) {
+                $userId = (int) ($user['user_id'] ?? 0);
+                if ($userId <= 0) {
+                    $_SESSION['error'] = 'Account could not be loaded. Please contact support.';
+                    bk_finish_redirect(bk_absolute_url('index.php'));
+                }
+
                 // Check if the user has verified their email
                 $stmt = $pdo->prepare('SELECT * FROM otp WHERE user_id = :user_id ORDER BY created_at DESC LIMIT 1');
-                $stmt->execute(['user_id' => $user['user_id']]);
+                $stmt->execute(['user_id' => $userId]);
                 $otp = $stmt->fetch(PDO::FETCH_ASSOC);
 
-                if (!$otp || $otp['status'] == 0) {
+                $stmtVerified = $pdo->prepare('SELECT 1 FROM otp WHERE user_id = :uid AND COALESCE(status, 0) > 0 LIMIT 1');
+                $stmtVerified->execute(['uid' => $userId]);
+                $emailVerified = (bool) $stmtVerified->fetchColumn();
+                if (!$emailVerified && $otp !== false && $otp !== null) {
+                    $emailVerified = ((int) ($otp['status'] ?? 0)) > 0;
+                }
+
+                if (!$emailVerified) {
                     // Store user data in session for OTP verification
-                    $_SESSION['user_id'] = $user['user_id'];
+                    $_SESSION['user_id'] = $userId;
                     $_SESSION['username'] = $user['username'];
                     $_SESSION['first_name'] = $user['FirstName'];
                     $_SESSION['last_name'] = $user['LastName'];
                     $_SESSION['error'] = 'Please verify your email first';
-                    
-                    header('Location: otp.php');
-                    exit();
+                    if ($otp && isset($otp['otp'])) {
+                        $_SESSION['pending_user_id'] = $userId;
+                        $_SESSION['pending_otp'] = $otp['otp'];
+                    }
+
+                    $otpTick = otp_continuation_issue($userId);
+                    $otpAbs = bk_absolute_url($otpTick !== '' ? ('user/otp.php?t=' . rawurlencode($otpTick)) : 'user/otp.php');
+                    bk_finish_redirect($otpAbs, 303);
                 } else {
                     // Store user data in session
-                    $_SESSION['user_id'] = $user['user_id'];
+                    $_SESSION['user_id'] = $userId;
                     $_SESSION['username'] = $user['username'];
                     $_SESSION['first_name'] = $user['FirstName'];
                     $_SESSION['last_name'] = $user['LastName'];
                     $_SESSION['verified'] = true;
 
-                    ob_end_clean();
-                    header('Location: ./user/user-dashboard.php');
-                    exit();
+                    bk_finish_redirect(bk_absolute_url('user/user-dashboard.php'));
                 }
             } else {
                 // If the password doesn't verify with the hash, but matches directly,
                 // it means we need to update this password
                 if ($user && $password === $user['password']) {
+                    $userId = (int) ($user['user_id'] ?? 0);
+                    if ($userId <= 0) {
+                        $_SESSION['error'] = 'Account could not be loaded. Please contact support.';
+                        bk_finish_redirect(bk_absolute_url('index.php'));
+                    }
+
                     // Update this user's password to a hash
                     $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
                     $updateStmt = $pdo->prepare("UPDATE users SET password = ? WHERE user_id = ?");
-                    $updateStmt->execute([$hashedPassword, $user['user_id']]);
-                    
-                    // Continue with login
-                    // Store user data in session for OTP verification
-                    $_SESSION['user_id'] = $user['user_id'];
+                    $updateStmt->execute([$hashedPassword, $userId]);
+
+                    $stmt = $pdo->prepare('SELECT * FROM otp WHERE user_id = :user_id ORDER BY created_at DESC LIMIT 1');
+                    $stmt->execute(['user_id' => $userId]);
+                    $otpRow = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                    $stmtVerified = $pdo->prepare('SELECT 1 FROM otp WHERE user_id = :uid AND COALESCE(status, 0) > 0 LIMIT 1');
+                    $stmtVerified->execute(['uid' => $userId]);
+                    $emailVerified = (bool) $stmtVerified->fetchColumn();
+                    if (!$emailVerified && $otpRow !== false && $otpRow !== null) {
+                        $emailVerified = ((int) ($otpRow['status'] ?? 0)) > 0;
+                    }
+
+                    if (!$emailVerified) {
+                        $_SESSION['user_id'] = $userId;
+                        $_SESSION['username'] = $user['username'];
+                        $_SESSION['first_name'] = $user['FirstName'];
+                        $_SESSION['last_name'] = $user['LastName'];
+                        $_SESSION['error'] = 'Please verify your email first';
+                        if ($otpRow && isset($otpRow['otp'])) {
+                            $_SESSION['pending_user_id'] = $userId;
+                            $_SESSION['pending_otp'] = $otpRow['otp'];
+                        }
+
+                        $otpTick = otp_continuation_issue($userId);
+                        $otpAbs = bk_absolute_url($otpTick !== '' ? ('user/otp.php?t=' . rawurlencode($otpTick)) : 'user/otp.php');
+                        bk_finish_redirect($otpAbs, 303);
+                    }
+
+                    $_SESSION['user_id'] = $userId;
                     $_SESSION['username'] = $user['username'];
                     $_SESSION['first_name'] = $user['FirstName'];
                     $_SESSION['last_name'] = $user['LastName'];
-                    $_SESSION['error'] = 'Please verify your email first';
-                    
-                    header('Location: otp.php');
-                    exit();
+                    $_SESSION['verified'] = true;
+
+                    bk_finish_redirect(bk_absolute_url('user/user-dashboard.php'));
                 } else {
                     $_SESSION['error'] = 'Invalid Username or Password';
                     header('Location: index.php');
@@ -97,10 +146,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
 // Initialize variables for error/success messages
 $message = '';
 
-// Check if user is already verified
-if (isset($_SESSION['verified']) && $_SESSION['verified'] === true) {
-    header('Location: ./user/user-dashboard.php');
-    exit();
+// Do not redirect to dashboard without a user id (avoids bounce: dashboard → login → dashboard)
+$sessionUid = (int) ($_SESSION['user_id'] ?? 0);
+if (!empty($_SESSION['verified']) && $_SESSION['verified'] === true && $sessionUid > 0) {
+    bk_finish_redirect(bk_absolute_url('user/user-dashboard.php'));
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['signup'])) {
@@ -131,6 +180,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['signup'])) {
 <html lang="en">
 
 <head>
+    <?php $SITE_ICON_BASE = ''; require __DIR__ . '/includes/site_head_icons.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
@@ -195,7 +245,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['signup'])) {
                     </div>
                 </div>
 
-                <a class="forgot-password" href="forgot-password.php">Forgot password?</a>
+                <a class="forgot-password" href="./user/forgot-password.php">Forgot password?</a>
                 
                 <button type="submit" name="login" class="signin-btn" value="1">
                     <span class="signin-btn-text">SIGN IN</span>
@@ -207,7 +257,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['signup'])) {
         <div class="right-section">
             <img src="images/logo.png" alt="Book King Logo">
             <p class="signup-text">New to our platform? Sign Up now.</p>
-            <button onclick="window.location.href='signup.php'" class="signup-btn">
+            <button onclick="window.location.href='./user/signup.php'" class="signup-btn">
                 <span class="signup-btn-text">SIGN UP</span>
             </button>
         </div>

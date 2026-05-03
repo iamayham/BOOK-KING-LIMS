@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once dirname(__DIR__) . '/helpers/session_bootstrap.php';
+bk_session_start();
 
 // Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
@@ -10,6 +11,8 @@ if (!isset($_SESSION['user_id'])) {
 // Include the database connection
 $pdo = require '../database/db_connection.php';
 
+$user_id = (int) $_SESSION['user_id'];
+
 // Get user's full name from session
 $userFullName = $_SESSION['first_name'] . ' ' . $_SESSION['last_name'];
 ?>
@@ -17,39 +20,29 @@ $userFullName = $_SESSION['first_name'] . ' ' . $_SESSION['last_name'];
 <html lang="en">
 
 <head>
+    <?php $SITE_ICON_BASE = '../'; require dirname(__DIR__) . '/includes/site_head_icons.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>User Returned Books Form</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/user-return-books.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="../assets/css/return-modal.css?v=<?php echo time(); ?>">
-    <link rel="stylesheet" href="../assets/css/user-return-books-2.css?v=<?php echo time();?>">
+    <link rel="stylesheet" href="../assets/css/user-return-books-2.css?v=<?php echo time(); ?>">
+    <link rel="stylesheet" href="../assets/css/user-shell-mobile.css?v=<?php echo time(); ?>">
 </head>
 
-<body>
-    <div class="sidebar">
-        <div class="logo-container">
-            <img src="../images/logo.png" alt="Book King Logo">
-        </div>
-        <div class="sidebar-item home" onclick="window.location.href='user-dashboard.php'">
-            <img src="../images/element-2 2.svg" alt="Home" class="icon-image">
-        </div>
-        <div class="sidebar-item list" onclick="window.location.href='user-return-books.php'">
-            <img src="../images/Vector.svg" alt="List" class="icon-image">
-        </div>
-        <div class="sidebar-item book" onclick="window.location.href='user-borrow-books.php'">
-            <img src="../images/book.png" alt="Book" class="icon-image">
-        </div>
-        <div class="sidebar-item logout" onclick="handleLogout()">
-            <img src="../images/logout 3.png" alt="Logout" class="icon-image">
-        </div>
-    </div>
+<body class="user-app user-return-page">
+<?php require_once __DIR__ . '/includes/user_shell_nav.php'; ?>
 
     <div class="main-content">
-        <div class="header">
+        <header class="header">
+            <div class="header-brand-mobile" aria-hidden="true">
+                <img src="../images/logo.png" alt="">
+            </div>
             <div class="user-info">
-                <div class="user-icon">
+                <div class="user-icon" onclick="openProfileModal()" role="button" tabindex="0" style="cursor: pointer;"
+                     onkeydown="if(event.key==='Enter')openProfileModal()">
                     <?php
                     $profilePicture = isset($_SESSION['profile_picture']) && $_SESSION['profile_picture'] !== 'default.jpg' 
                         ? '../uploads/profile_pictures/' . $_SESSION['profile_picture'] 
@@ -62,11 +55,14 @@ $userFullName = $_SESSION['first_name'] . ' ' . $_SESSION['last_name'];
                     <div class="user-role">User</div>
                 </div>
             </div>
-            <div class="time">
-                <div class="current-time">12:29 PM</div>
-                <div class="current-date">Sep 02, 2023</div>
+            <div class="time" aria-live="polite">
+                <div id="current-time" class="current-time"></div>
+                <div id="current-date" class="current-date"></div>
             </div>
-        </div>
+            <div class="settings-icon">
+                <img src="../images/Vector.png" alt="Settings" style="cursor: pointer;" onclick="openProfileModal()">
+            </div>
+        </header>
 
         <div class="borrowed-books-header">
             <div class="borrowed-books-title">Borrowed Books</div>
@@ -128,7 +124,6 @@ $userFullName = $_SESSION['first_name'] . ' ' . $_SESSION['last_name'];
                         }
 
                         // Fetch books based on initial active tab (Borrowed Books)
-                        $user_id = $_SESSION['user_id'];
                         try {
                             $stmt = $pdo->prepare("
                                 SELECT b.*, bb.borrow_date, bb.due_date, bb.return_date, bb.user_id,
@@ -221,12 +216,11 @@ $userFullName = $_SESSION['first_name'] . ' ' . $_SESSION['last_name'];
                 borrowedTab.classList.add('inactive');
                 loadBooks('returned');
             } else {
-                // Default to borrowed tab
+                // Default: borrowed list is server-rendered; avoid replacing it on load.
                 borrowedTab.classList.remove('inactive');
                 borrowedTab.classList.add('active');
                 returnedTab.classList.remove('active');
                 returnedTab.classList.add('inactive');
-                loadBooks('borrowed');
             }
 
             // Add click handlers for tabs

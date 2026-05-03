@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Book King  world of books">
+  <defs>
+    <linearGradient id="ocean" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#6eb5e8"/>
+      <stop offset="100%" style="stop-color:#2d7fbc"/>
+    </linearGradient>
+  </defs>
+  <circle cx="16" cy="16" r="15" fill="url(#ocean)"/>
+  <ellipse cx="16" cy="16" rx="6" ry="15" fill="none" stroke="#ffffff" stroke-width="1.2" opacity="0.4"/>
+  <path fill="#7cb342" stroke="#5a8f2a" stroke-width="0.4" opacity="0.92" d="M5 17c2-5 7-9 12-10 3 5 3 11-1 15-6 0-11-3-11-5z"/>
+  <path fill="#9ccc65" opacity="0.88" d="M17 7c5 2 9 7 10 11-5 4-11 5-17 3 1-6 4-11 7-14z"/>
+  <circle cx="16" cy="16" r="15" fill="none" stroke="#b07154" stroke-width="1.5" opacity="0.45"/>
+</svg>

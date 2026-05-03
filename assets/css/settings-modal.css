@@ -68,7 +68,7 @@
 .modal {
     display: none;
     position: fixed;
-    z-index: 9999;
+    z-index: 11000;
     left: 0;
     top: 0;
     width: 100%;
@@ -152,12 +152,13 @@
 .notification {
     display: none;
     position: fixed;
-    top: 20px;
-    right: 20px;
+    top: max(12px, env(safe-area-inset-top));
+    right: max(12px, env(safe-area-inset-right));
+    left: auto;
     padding: 15px 25px;
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    z-index: 10000;
+    z-index: 11001;
     opacity: 0;
     transform: translateY(-20px);
     transition: all 0.3s ease;
@@ -192,8 +193,18 @@
 /* Responsive Styles */
 @media screen and (max-width: 768px) {
     .modal-content {
-        width: 95%;
-        margin: 10px;
+        width: 100%;
+        max-width: none;
+        max-height: calc(100dvh - 24px);
+        margin: 12px;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        border-radius: 12px;
+    }
+
+    .modal {
+        align-items: flex-end;
+        padding-bottom: env(safe-area-inset-bottom);
     }
 
     .profile-picture-actions {

@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once dirname(__DIR__) . '/helpers/session_bootstrap.php';
+bk_session_start();
 require '../database/db_connection.php';
 
 if (!isset($_SESSION['reset_user_id'])) {
@@ -39,6 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <?php $SITE_ICON_BASE = '../'; require dirname(__DIR__) . '/includes/site_head_icons.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reset Password</title>
@@ -119,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 popup.style.display = 'block';
                 
                 setTimeout(() => {
-                    window.location.href = 'index.php';
+                    window.location.href = '../index.php';
                 }, 3000);
             } else {
                 alert(data.message);

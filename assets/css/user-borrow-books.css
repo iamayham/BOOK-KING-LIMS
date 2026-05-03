@@ -418,6 +418,7 @@ input[type="checkbox"]:disabled {
     text-align: center;
     padding: 0;
     z-index: 1001;
+    pointer-events: none;
 }
 
 .book-king-sidebar>div {
@@ -929,4 +930,150 @@ input[type="checkbox"]:disabled {
     border: 1px solid #B07154;
     border-radius: 4px;
     font-size: 13px;
+}
+
+/* Selection feedback — borrow books */
+.borrow-selection-hint {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 0 20px 18px;
+    padding: 14px 18px;
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid rgba(176, 113, 84, 0.22);
+    box-shadow: 0 2px 8px rgba(176, 113, 84, 0.06);
+}
+
+.borrow-selection-hint--active {
+    background: rgba(176, 113, 84, 0.11);
+    border-color: rgba(176, 113, 84, 0.45);
+}
+
+.borrow-selection-count-wrap {
+    flex-shrink: 0;
+    min-width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #ececec;
+    color: #555;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 17px;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.borrow-selection-hint--active .borrow-selection-count-wrap {
+    background: #b07154;
+    color: #fff;
+}
+
+.borrow-selection-msg {
+    font-size: 14px;
+    font-weight: 600;
+    color: #6d4b38;
+    line-height: 1.35;
+}
+
+.borrow-selection-hint--active .borrow-selection-msg {
+    color: #4a3225;
+}
+
+.books-table tbody tr.book-row--selected td {
+    background: rgba(176, 113, 84, 0.1) !important;
+}
+
+.books-table tbody tr.book-row--selected td:first-child {
+    box-shadow: inset 4px 0 0 #b07154;
+}
+
+.acquire-selection-badge {
+    margin-left: 6px;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 11px;
+    background: rgba(255, 255, 255, 0.95);
+    color: #b07154;
+    font-size: 13px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.acquire-button {
+    gap: 8px;
+}
+
+/* Title column: show availability without scrolling to Status (mobile-friendly) */
+.book-title-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 8px;
+    vertical-align: middle;
+}
+
+.book-title-cell .book-title {
+    display: block;
+    line-height: 1.35;
+}
+
+.availability-chip {
+    display: inline-block;
+    padding: 7px 14px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border: 2px solid transparent;
+    line-height: 1.2;
+}
+
+.availability-chip--available {
+    background: #c8e6c9;
+    color: #1b5e20;
+    border-color: #2e7d32;
+}
+
+.availability-chip--unavailable {
+    background: #ffcdd2;
+    color: #b71c1c;
+    border-color: #c62828;
+}
+
+.book-row--unavailable .book-cover {
+    opacity: 0.72;
+    filter: grayscale(0.3);
+}
+
+/* Status column — easier to read when you scroll horizontally */
+.books-table .status-badge {
+    display: inline-block;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    min-width: 7.5rem;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.books-table .status-available {
+    background: #c8e6c9 !important;
+    color: #1b5e20 !important;
+    border: 2px solid #2e7d32;
+}
+
+.books-table .status-borrowed {
+    background: #ffcdd2 !important;
+    color: #b71c1c !important;
+    border: 2px solid #c62828;
 }

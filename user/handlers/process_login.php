@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once dirname(__DIR__, 2) . '/helpers/session_bootstrap.php';
+bk_session_start();
 require '../../database/db_connection.php';
 
 // Debug: Log the start of the process

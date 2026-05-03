@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once dirname(__DIR__, 2) . '/helpers/session_bootstrap.php';
+bk_session_start();
 
 // Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
@@ -68,7 +69,7 @@ try {
                 echo "<div class='table-cell'>" . date('d-m-Y h:i A', strtotime($book['borrow_date'])) . "</div>";
                 echo "<div class='table-cell'>";
                 echo "<button class='return-btn' onclick='openReturnConfirm({$book['book_id']})'>";
-                echo "<img src='images/redo 1.png' alt='Return' class='return-icon'>";
+                echo "<img src='../../images/redo-1.png' alt='Return' class='return-icon'>";
                 echo "<span>Return</span>";
                 echo "</button>";
                 echo "</div>";

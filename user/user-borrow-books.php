@@ -1,5 +1,11 @@
 <?php
-session_start();
+require_once dirname(__DIR__) . '/helpers/session_bootstrap.php';
+bk_session_start();
+
+if (!isset($_SESSION['user_id'])) {
+    header('Location: ../index.php');
+    exit();
+}
 
 // Include the database connection
 $pdo = require '../database/db_connection.php';
@@ -58,36 +64,25 @@ $userFullName = $_SESSION['first_name'] . ' ' . $_SESSION['last_name'];
 <html lang="en">
 
 <head>
+    <?php $SITE_ICON_BASE = '../'; require dirname(__DIR__) . '/includes/site_head_icons.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>User Borrow Books</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/user-borrow-books.css?v=<?php echo time(); ?>">
-    <link rel="stylesheet" href="../assets/css/user-borrow-books-2.css.css?v=<?php echo time();?>">
+    <link rel="stylesheet" href="../assets/css/user-borrow-books-2.css?v=<?php echo time(); ?>">
+    <link rel="stylesheet" href="../assets/css/user-shell-mobile.css?v=<?php echo time(); ?>">
 </head>
 
-<body>
-    <div class="sidebar">
-        <div class="logo-container">
-            <img src="../images/logo.png" alt="Book King Logo">
-        </div>
-        <div class="sidebar-item home" onclick="window.location.href='user-dashboard.php'">
-            <img src="../images/element-2 2.svg" alt="Home" class="icon-image">
-        </div>
-        <div class="sidebar-item list" onclick="window.location.href='user-return-books.php'">
-            <img src="../images/Vector.svg" alt="List" class="icon-image">
-        </div>
-        <div class="sidebar-item book" onclick="window.location.href='user-borrow-books.php'">
-            <img src="../images/book.png" alt="Book" class="icon-image">
-        </div>
-        <div class="sidebar-item logout" onclick="handleLogout()">
-            <img src="../images/logout 3.png" alt="Logout" class="icon-image">
-        </div>
-    </div>
+<body class="user-app user-borrow-page">
+<?php require_once __DIR__ . '/includes/user_shell_nav.php'; ?>
 
     <div class="main-content">
         <div class="header">
+            <div class="header-brand-mobile" aria-hidden="true">
+                <img src="../images/logo.png" alt="">
+            </div>
             <div class="user-info">
                 <div class="user-icon">
                     <?php
@@ -116,6 +111,11 @@ $userFullName = $_SESSION['first_name'] . ' ' . $_SESSION['last_name'];
                     <input type="text" class="search-input" id="searchInput" placeholder="Search books...">
                 </div>
             </div>
+
+            <div class="borrow-selection-hint" id="borrowSelectionBar" role="status" aria-live="polite">
+                <span class="borrow-selection-count-wrap" aria-hidden="true"><span id="borrowSelectionCount">0</span></span>
+                <span class="borrow-selection-msg" id="borrowSelectionMsg">Tap a row or the checkbox to choose books.</span>
+            </div>
         
             <div class="books-table">
                 <table>
@@ -132,30 +132,39 @@ $userFullName = $_SESSION['first_name'] . ' ' . $_SESSION['last_name'];
                     </thead>
                     <tbody>
                         <?php foreach ($books as $book): ?>
-                            <tr>
+                            <?php
+                            $isAvailable = ($book['availability'] === 'Available');
+                            ?>
+                            <tr class="<?= $isAvailable ? 'book-row--available' : 'book-row--unavailable' ?>">
                                 <td>
                                     <img src="<?= htmlspecialchars($book['cover_image_url'] ?? 'images/default-book-cover.jpg') ?>" 
                                          alt="<?= htmlspecialchars($book['title']) ?>" 
                                          class="book-cover">
                                 </td>
-                                <td class="book-title"><?= htmlspecialchars($book['title']) ?></td>
+                                <td class="book-title-cell">
+                                    <span class="book-title"><?= htmlspecialchars($book['title']) ?></span>
+                                    <span class="availability-chip <?= $isAvailable ? 'availability-chip--available' : 'availability-chip--unavailable' ?>"
+                                          aria-label="<?= $isAvailable ? 'This book is available to borrow' : 'This book is not available' ?>">
+                                        <?= $isAvailable ? 'Available' : 'Unavailable' ?>
+                                    </span>
+                                </td>
                                 <td><?= htmlspecialchars($book['author']) ?></td>
                                 <td><?= htmlspecialchars($book['type']) ?></td>
                                 <td><?= htmlspecialchars($book['language']) ?></td>
                                 <td>
-                                    <span class="status-badge <?= $book['availability'] === 'Available' ? 'status-available' : 'status-borrowed' ?>">
-                                        <?= htmlspecialchars($book['availability']) ?>
+                                    <span class="status-badge <?= $isAvailable ? 'status-available' : 'status-borrowed' ?>">
+                                        <?= $isAvailable ? 'Available' : 'Unavailable' ?>
                                     </span>
                                 </td>
                                 <td>
-                                    <div class="checkbox-wrapper">
+                                    <label class="checkbox-wrapper">
                                         <input type="checkbox" class="book-checkbox"
-                                            <?= $book['availability'] === 'Unavailable' ? 'disabled' : '' ?>
+                                            <?= !$isAvailable ? 'disabled' : '' ?>
                                             data-book-id="<?= htmlspecialchars($book['book_id']) ?>"
                                             data-book-title="<?= htmlspecialchars($book['title']) ?>"
                                             data-book-type="<?= htmlspecialchars($book['type']) ?>"
                                             data-book-language="<?= htmlspecialchars($book['language']) ?>">
-                                    </div>
+                                    </label>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -164,9 +173,10 @@ $userFullName = $_SESSION['first_name'] . ' ' . $_SESSION['last_name'];
             </div>
         </div>
 
-        <button class="acquire-button" onclick="processSelectedBooks()">
+        <button type="button" class="acquire-button" onclick="processSelectedBooks()" aria-describedby="borrowSelectionMsg">
             <div class="acquire-icon"></div>
             <span>Acquire</span>
+            <span class="acquire-selection-badge" id="acquireSelectionBadge" hidden>0</span>
         </button>
     </div>
 
@@ -253,6 +263,43 @@ $userFullName = $_SESSION['first_name'] . ' ' . $_SESSION['last_name'];
             window.location.href = 'user-borrow-confirm.php';
         }
 
+        function syncBorrowSelectionUi() {
+            const rows = document.querySelectorAll('.books-table tbody tr');
+            let n = 0;
+            rows.forEach(function(row) {
+                const cb = row.querySelector('.book-checkbox');
+                if (!cb) {
+                    return;
+                }
+                const on = cb.checked && !cb.disabled;
+                row.classList.toggle('book-row--selected', on);
+                if (on) {
+                    n++;
+                }
+            });
+
+            const bar = document.getElementById('borrowSelectionBar');
+            const countEl = document.getElementById('borrowSelectionCount');
+            const msgEl = document.getElementById('borrowSelectionMsg');
+            const badge = document.getElementById('acquireSelectionBadge');
+
+            if (countEl) {
+                countEl.textContent = String(n);
+            }
+            if (bar) {
+                bar.classList.toggle('borrow-selection-hint--active', n > 0);
+            }
+            if (msgEl) {
+                msgEl.textContent = n === 0
+                    ? 'Tap a row or the checkbox to choose books.'
+                    : (n === 1 ? 'You chose 1 book. Tap Acquire when ready.' : 'You chose ' + n + ' books. Tap Acquire when ready.');
+            }
+            if (badge) {
+                badge.textContent = String(n);
+                badge.hidden = n === 0;
+            }
+        }
+
         // Replace the existing searchBooks function with this one
         function searchBooks() {
             const searchInput = document.querySelector('.search-input');
@@ -273,6 +320,34 @@ $userFullName = $_SESSION['first_name'] . ' ' . $_SESSION['last_name'];
                 row.style.display = matches ? '' : 'none';
             });
         }
+
+        // Phone/tablet: tap a row (outside the checkbox) to toggle selection — avoids tiny checkbox hits + overlap with fixed Acquire bar
+        document.addEventListener('DOMContentLoaded', function() {
+            const tbody = document.querySelector('.books-table tbody');
+            if (tbody) {
+                tbody.addEventListener('click', function(e) {
+                    if (e.target.closest('.checkbox-wrapper')) {
+                        return;
+                    }
+                    const row = e.target.closest('tr');
+                    if (!row) {
+                        return;
+                    }
+                    const cb = row.querySelector('.book-checkbox');
+                    if (!cb || cb.disabled) {
+                        return;
+                    }
+                    cb.checked = !cb.checked;
+                    syncBorrowSelectionUi();
+                });
+                tbody.addEventListener('change', function(e) {
+                    if (e.target && e.target.classList.contains('book-checkbox')) {
+                        syncBorrowSelectionUi();
+                    }
+                });
+            }
+            syncBorrowSelectionUi();
+        });
 
         // Update the event listeners
         document.addEventListener('DOMContentLoaded', function() {

@@ -309,19 +309,31 @@ body {
         overflow-x: hidden;
         overflow-y: auto;
         height: auto;
+        min-height: 100vh;
+        min-height: 100dvh;
+    }
+
+    body.signup-page {
+        display: block;
     }
 
     .container {
         flex-direction: column;
+        width: 100%;
+        max-width: 100%;
+        min-height: 100vh;
+        min-height: 100dvh;
         height: auto;
-        overflow-y: auto;
+        overflow-x: hidden;
+        overflow-y: visible;
     }
 
     .left-section {
         width: 100%;
         height: auto;
-        padding: 2rem 1rem;
-        min-height: 250px;
+        padding: max(1.25rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) 1.25rem max(1rem, env(safe-area-inset-left));
+        min-height: 0;
+        flex-shrink: 0;
     }
 
     .left-section img {
@@ -335,111 +347,179 @@ body {
     }
 
     .signin-btn {
-        width: 180px;
-        height: 40px;
+        width: min(260px, 100%);
+        min-height: 48px;
+        height: auto;
+        padding: 12px 16px;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: rgba(255, 255, 255, 0.2);
     }
 
     .right-section {
         width: 100%;
         height: auto;
-        padding: 2rem 1.5rem;
+        flex: 1;
+        padding: 1.25rem max(1rem, env(safe-area-inset-right)) max(2rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+        overflow-x: hidden;
+        overflow-y: visible;
     }
 
     .title {
-        font-size: 28px;
-        margin-top: 0.5rem;
+        font-size: clamp(1.35rem, 5vw, 1.75rem);
+        margin-top: 0.25rem;
+        line-height: 1.25;
     }
 
     .subtitle {
         font-size: 13px;
-        margin-bottom: 2rem;
+        margin-bottom: 1.25rem;
+        padding: 0 4px;
     }
 
     #signup-form {
         grid-template-columns: 1fr;
-        gap: 12px;
+        gap: 14px;
         padding: 0;
+        margin-top: 0.5rem;
+    }
+
+    /* Space for validation hints under fields */
+    .input-container {
+        margin-bottom: 0;
+        padding-bottom: 1.35rem;
+    }
+
+    .input-container.contact {
+        padding-bottom: 1.5rem;
+    }
+
+    .input-container.email {
+        padding-bottom: 1.5rem;
     }
 
     .input-field {
-        height: 42px;
-        font-size: 13px;
+        min-height: 48px;
+        height: auto;
+        padding: 12px 18px;
+        font-size: 16px;
+        touch-action: manipulation;
     }
 
     .input-field::placeholder {
-        font-size: 13px;
+        font-size: 14px;
+    }
+
+    .password-container {
+        padding-bottom: 0;
+        margin-bottom: 0;
+    }
+
+    /* Strength meter below password instead of overlapping next row */
+    .password-strength {
+        position: relative;
+        bottom: auto;
+        left: auto;
+        margin-top: 10px;
+        padding: 4px 12px 0;
     }
 
     .signup-btn {
-        margin-top: 1.5rem;
-        height: 42px;
+        margin-top: 1rem;
+        min-height: 50px;
+        height: auto;
+        padding: 14px 16px;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .password-toggle {
+        min-width: 44px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
     }
 
     .message {
-        font-size: 12px;
-        padding: 8px 12px;
-        margin-bottom: 20px;
+        font-size: 13px;
+        padding: 12px 14px;
+        margin: 0 0 16px;
+        line-height: 1.35;
+    }
+
+    .email-message,
+    .username-message {
+        bottom: auto;
+        position: relative;
+        padding: 6px 12px 0;
+        margin-top: 4px;
+    }
+
+    .contact-message {
+        margin-top: 8px !important;
+        font-size: 12px !important;
+        line-height: 1.35;
     }
 }
 
 @media (max-width: 480px) {
     .left-section {
-        padding: 1.5rem 1rem;
-        min-height: 200px;
+        padding-top: max(1rem, env(safe-area-inset-top));
+        padding-bottom: 1rem;
     }
 
     .left-section img {
-        width: 100px;
+        width: 96px;
+    }
+
+    .signin-btn-text {
+        font-size: 15px;
     }
 
     .title {
-        font-size: 24px;
+        font-size: 1.35rem;
     }
 
     .subtitle {
         font-size: 12px;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1rem;
     }
 
     .right-section {
-        padding: 1.5rem 1rem;
+        padding-left: max(0.875rem, env(safe-area-inset-left));
+        padding-right: max(0.875rem, env(safe-area-inset-right));
     }
 
     #signup-form {
-        gap: 10px;
+        gap: 12px;
     }
 
+    /* Keep 16px inputs on small phones — avoids iOS zoom */
     .input-field {
-        height: 40px;
-        font-size: 12px;
-        padding: 8px 15px;
+        font-size: 16px;
+        padding: 12px 16px;
     }
 
     .input-field::placeholder {
-        font-size: 12px;
-    }
-
-    .password-toggle {
-        right: 15px;
-    }
-
-    .signup-btn {
-        height: 40px;
-    }
-
-    .signup-btn-text {
         font-size: 13px;
     }
 
+    .signup-btn-text {
+        font-size: 14px;
+        letter-spacing: 0.04em;
+    }
+
     .message {
-        font-size: 11px;
-        padding: 6px 10px;
+        font-size: 12px;
+        padding: 10px 12px;
     }
 
     .email-message,
     .username-message {
         font-size: 11px;
-        padding: 2px 15px;
     }
 }
 
@@ -447,7 +527,6 @@ body {
 @media (hover: none) and (pointer: coarse) {
     .signin-btn,
     .signup-btn,
-    .input-field,
     .password-toggle {
         cursor: default;
         -webkit-tap-highlight-color: transparent;
@@ -457,9 +536,11 @@ body {
     .signup-btn:active {
         transform: scale(0.98);
     }
+}
 
-    .input-field:focus {
-        font-size: 16px; /* Prevent iOS zoom on input focus */
+@media (max-width: 768px) {
+    .signup-page .input-field:focus {
+        font-size: 16px;
     }
 }
 

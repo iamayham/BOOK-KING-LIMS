@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once dirname(__DIR__, 2) . '/helpers/session_bootstrap.php';
+bk_session_start();
 
 if (!isset($_SESSION['user_id'])) {
     echo json_encode(['success' => false, 'message' => 'Not logged in']);

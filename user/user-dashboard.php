@@ -1,11 +1,12 @@
 <?php
-session_start();
+require_once dirname(__DIR__) . '/helpers/session_bootstrap.php';
+bk_session_start();
 
-// Check if user is logged in
-if (!isset($_SESSION['user_id'])) {
-    error_log("User not logged in. Session data: " . print_r($_SESSION, true));
-    header('Location: ../index.php');
-    exit();
+// Check if user is logged in (accept numeric string from DB/session encode)
+$uid = $_SESSION['user_id'] ?? null;
+if ($uid === null || $uid === '' || (int) $uid <= 0) {
+    error_log('User not logged in. Session data: ' . print_r($_SESSION, true));
+    bk_finish_redirect(bk_absolute_url('index.php'));
 }
 
 // Debug: Log successful dashboard access
@@ -75,13 +76,15 @@ try {
 <html lang="en">
 
 <head>
+    <?php $SITE_ICON_BASE = '../'; require dirname(__DIR__) . '/includes/site_head_icons.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>User Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/css/user-dashboard.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="../assets/css/user-dashboard-2.css?v=<?php echo time();?>">
     <link rel="stylesheet" href="../assets/css/settings-modal.css?v=<?php echo time(); ?>">
+    <link rel="stylesheet" href="../assets/css/user-shell-mobile.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <script>
         function updateTime() {
@@ -112,27 +115,14 @@ try {
     </script>
 </head>
 
-<body>
-    <div class="sidebar">
-        <div class="logo-container">
-            <img src="../images/logo.png" alt="Book King Logo">
-        </div>
-        <div class="sidebar-item home" onclick="window.location.href='user-dashboard.php'">
-            <img src="../images/element-2 2.svg" alt="Home" class="icon-image">
-        </div>
-        <div class="sidebar-item list" onclick="window.location.href='user-return-books.php'">
-            <img src="../images/Vector.svg" alt="List" class="icon-image">
-        </div>
-        <div class="sidebar-item book" onclick="window.location.href='user-borrow-books.php'">
-            <img src="../images/book.png" alt="Book" class="icon-image">
-        </div>
-        <div class="sidebar-item logout" onclick="handleLogout()">
-            <img src="../images/logout 3.png" alt="Logout" class="icon-image">
-        </div>
-    </div>
+<body class="user-app dashboard-page">
+<?php require_once __DIR__ . '/includes/user_shell_nav.php'; ?>
 
     <div class="main-content">
-        <div class="header">
+        <header class="header">
+            <div class="header-brand-mobile" aria-hidden="true">
+                <img src="../images/logo.png" alt="">
+            </div>
             <div class="user-info">
                 <div class="user-icon" onclick="openSettingsModal()" style="cursor: pointer;">
                     <?php
@@ -147,26 +137,26 @@ try {
                     <div class="user-role">User</div>
                 </div>
             </div>
-            <div class="quote-container" style="flex: 1; margin: 15px 0 0 20px; max-width: 550px; text-align: center;">
-                <div id="quoteCarousel" class="quotes-carousel" style="height: 100%; display: flex; flex-direction: column; justify-content: center;">
-                    <div class="quote-slide fade active" style="margin: 0 0 12px 0;">
-                        <div class="quote-text" style="font-size: 16px; line-height: 1.4; margin-bottom: 6px; font-weight: 500;">"A book is a gateway to other worlds, a key to unlock imagination's door."</div>
-                        <div class="quote-author" style="font-size: 13px; font-style: italic;">~ Neil Gaiman</div>
+            <div class="dashboard-quote-wrapper quote-container">
+                <div id="quoteCarousel" class="quotes-carousel">
+                    <div class="quote-slide fade active dashboard-quote-slide">
+                        <div class="quote-text quote-text-compact">"A book is a gateway to other worlds, a key to unlock imagination's door."</div>
+                        <div class="quote-author quote-author-compact">~ Neil Gaiman</div>
                     </div>
-                    <div class="quote-slide fade" style="margin: 0 0 12px 0;">
-                        <div class="quote-text" style="font-size: 16px; line-height: 1.4; margin-bottom: 6px; font-weight: 500;">"The more that you read, the more things you will know. The more that you learn, the more places you'll go."</div>
-                        <div class="quote-author" style="font-size: 13px; font-style: italic;">~ Dr. Seuss</div>
+                    <div class="quote-slide fade dashboard-quote-slide">
+                        <div class="quote-text quote-text-compact">"The more that you read, the more things you will know. The more that you learn, the more places you'll go."</div>
+                        <div class="quote-author quote-author-compact">~ Dr. Seuss</div>
                     </div>
                 </div>
             </div>
-            <div class="time">
+            <div class="time" aria-live="polite">
                 <div id="current-time" class="current-time"></div>
                 <div id="current-date" class="current-date"></div>
             </div>
             <div class="settings-icon">
                 <img src="../images/Vector.png" alt="Settings" style="cursor: pointer;" onclick="openSettingsModal()">
             </div>
-        </div>
+        </header>
 
         <div class="dashboard-grid">
             <a href="user-return-books.php?tab=borrowed" class="card-link">
@@ -218,28 +208,130 @@ try {
             </a>
         </div>
 
-        <div style="margin: 25px auto 0; padding: 25px; width: 100%; max-width: 98%; text-align: center; background: white; border-radius: 15px; box-shadow: 0 4px 15px rgba(176, 113, 84, 0.1);">
-            <h3 style="margin-bottom: 20px; color: #B07154; font-size: 1.4rem; font-weight: 600;">Books You Might Like</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; padding: 0 8px;" id="popular-books-container">
+        <section class="dashboard-recommendations popular-books-panel">
+            <h3 class="dashboard-recommendations-title">Books You Might Like</h3>
+            <div class="popular-books-grid" id="popular-books-container">
                 <?php
                 try {
-                    // Get 24 random books from the database
+                    $userId = (int) ($_SESSION['user_id'] ?? 0);
+
+                    // Real recommendations:
+                    // 1) Prefer books matching the user's borrowed authors/types
+                    // 2) Exclude books this user already borrowed before
+                    // 3) Use overall borrow popularity as fallback ranking
                     $stmt = $pdo->prepare("
-                        SELECT b.*, 
-                            CASE 
+                        SELECT
+                            b.*,
+                            CASE
                                 WHEN EXISTS (
-                                    SELECT 1 FROM borrowed_books bb 
-                                    WHERE bb.book_id = b.book_id 
+                                    SELECT 1 FROM borrowed_books bb
+                                    WHERE bb.book_id = b.book_id
                                     AND bb.return_date IS NULL
                                 ) THEN 'Unavailable'
                                 ELSE 'Available'
-                            END as availability
+                            END AS availability,
+                            COALESCE(pop.popularity_score, 0) AS popularity_score,
+                            CASE
+                                WHEN EXISTS (
+                                    SELECT 1
+                                    FROM borrowed_books ubb
+                                    INNER JOIN books ub ON ub.book_id = ubb.book_id
+                                    WHERE ubb.user_id = :uid_author
+                                      AND ub.author = b.author
+                                      AND ub.author IS NOT NULL
+                                      AND ub.author <> ''
+                                ) THEN 1
+                                ELSE 0
+                            END AS author_match,
+                            CASE
+                                WHEN EXISTS (
+                                    SELECT 1
+                                    FROM borrowed_books ubb
+                                    INNER JOIN books ub ON ub.book_id = ubb.book_id
+                                    WHERE ubb.user_id = :uid_type
+                                      AND ub.type = b.type
+                                      AND ub.type IS NOT NULL
+                                      AND ub.type <> ''
+                                ) THEN 1
+                                ELSE 0
+                            END AS type_match
                         FROM books b
-                        ORDER BY RAND()
+                        LEFT JOIN (
+                            SELECT book_id, COUNT(*) AS popularity_score
+                            FROM borrowed_books
+                            GROUP BY book_id
+                        ) pop ON pop.book_id = b.book_id
+                        WHERE b.book_id NOT IN (
+                            SELECT book_id
+                            FROM borrowed_books
+                            WHERE user_id = :uid_exclude
+                        )
+                        ORDER BY
+                            author_match DESC,
+                            type_match DESC,
+                            popularity_score DESC,
+                            b.book_id DESC
                         LIMIT 24
                     ");
-                    $stmt->execute();
+                    $stmt->execute([
+                        'uid_author' => $userId,
+                        'uid_type' => $userId,
+                        'uid_exclude' => $userId
+                    ]);
                     $recommendedBooks = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                    // If user already borrowed almost everything, fall back to a
+                    // popular + recent mix from all books so the panel stays filled.
+                    if (count($recommendedBooks) < 24) {
+                        $remainingSlots = max(0, 24 - count($recommendedBooks));
+                        $excludeIds = array_map(
+                            static function ($book) {
+                                return (int) ($book['book_id'] ?? 0);
+                            },
+                            $recommendedBooks
+                        );
+
+                        $fallbackQuery = "
+                            SELECT
+                                b.*,
+                                CASE
+                                    WHEN EXISTS (
+                                        SELECT 1 FROM borrowed_books bb
+                                        WHERE bb.book_id = b.book_id
+                                          AND bb.return_date IS NULL
+                                    ) THEN 'Unavailable'
+                                    ELSE 'Available'
+                                END AS availability,
+                                COALESCE(pop.popularity_score, 0) AS popularity_score
+                            FROM books b
+                            LEFT JOIN (
+                                SELECT book_id, COUNT(*) AS popularity_score
+                                FROM borrowed_books
+                                GROUP BY book_id
+                            ) pop ON pop.book_id = b.book_id
+                        ";
+
+                        $conditions = [];
+                        $params = [];
+                        if (!empty($excludeIds)) {
+                            $placeholders = implode(',', array_fill(0, count($excludeIds), '?'));
+                            $conditions[] = "b.book_id NOT IN ($placeholders)";
+                            $params = array_merge($params, $excludeIds);
+                        }
+
+                        if (!empty($conditions)) {
+                            $fallbackQuery .= ' WHERE ' . implode(' AND ', $conditions);
+                        }
+
+                        $fallbackQuery .= ' ORDER BY popularity_score DESC, b.book_id DESC LIMIT ' . (int) $remainingSlots;
+
+                        $stmtFallback = $pdo->prepare($fallbackQuery);
+                        $stmtFallback->execute($params);
+                        $fallbackBooks = $stmtFallback->fetchAll(PDO::FETCH_ASSOC);
+                        if (!empty($fallbackBooks)) {
+                            $recommendedBooks = array_merge($recommendedBooks, $fallbackBooks);
+                        }
+                    }
 
                     foreach ($recommendedBooks as $book) {
                         // Use the book's cover image if available, otherwise generate one
@@ -273,8 +365,8 @@ try {
                     echo '<div style="grid-column:1/-1; padding:20px; color:#B07154; font-size:14px;">Unable to load recommendations at the moment. Please try again later.</div>';
                 }
                 ?>
-                            </div>
-                </div>
+            </div>
+        </section>
 
         <style>
             .card-stats {

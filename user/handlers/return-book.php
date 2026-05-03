@@ -4,7 +4,8 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0);
 
 // Start session and set JSON header first
-session_start();
+require_once dirname(__DIR__, 2) . '/helpers/session_bootstrap.php';
+bk_session_start();
 header('Content-Type: application/json');
 
 // Check if admin is logged in

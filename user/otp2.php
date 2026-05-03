@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once dirname(__DIR__) . '/helpers/session_bootstrap.php';
+bk_session_start();
 require '../database/db_connection.php';
 require_once '../helpers/activity_logger.php';
 
@@ -34,6 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <?php $SITE_ICON_BASE = '../'; require dirname(__DIR__) . '/includes/site_head_icons.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>OTP Verification</title>
@@ -44,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
     <div class="container">
         <div class="right-section">
-            <img src="images/logo.png" alt="Main Logo" class="main-logo">
+            <img src="../images/logo.png" alt="Main Logo" class="main-logo">
             <p class="tagline">"Your premier digital library for borrowing and reading books"</p>
         </div>
 

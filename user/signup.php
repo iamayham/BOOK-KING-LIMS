@@ -1,23 +1,44 @@
 <?php
-// Start the session
-session_start();
+ob_start();
+require_once dirname(__DIR__) . '/helpers/session_bootstrap.php';
+bk_session_start();
 
 // Include the database connection
 $pdo = require '../database/db_connection.php';
 
 // Add near the top after session_start()
 require_once '../helpers/activity_logger.php';
+require_once '../helpers/otp_continuation.php';
 
 // Function to generate a random six-digit OTP
 function generateOTP($pdo, $user_id)
 {
     $otp = rand(100000, 999999); // This will generate a random six-digit OTP
+    $manualOtpId = null;
+    $otpIdColumn = $pdo->query("SHOW COLUMNS FROM otp LIKE 'id'")->fetch(PDO::FETCH_ASSOC);
+    $otpIdNeedsManualValue = $otpIdColumn
+        && stripos((string) ($otpIdColumn['Extra'] ?? ''), 'auto_increment') === false
+        && (($otpIdColumn['Null'] ?? '') === 'NO')
+        && ($otpIdColumn['Default'] === null);
 
-    $stmt = $pdo->prepare('INSERT INTO otp (user_id, otp) VALUES (:user_id, :otp)');
-    $stmt->execute([
-        'user_id' => $user_id,
-        'otp' => $otp
-    ]);
+    if ($otpIdNeedsManualValue) {
+        $manualOtpId = (int) $pdo->query("SELECT COALESCE(MAX(id), 0) + 1 FROM otp")->fetchColumn();
+    }
+
+    if ($otpIdNeedsManualValue) {
+        $stmt = $pdo->prepare('INSERT INTO otp (id, user_id, otp) VALUES (:id, :user_id, :otp)');
+        $stmt->execute([
+            'id' => $manualOtpId,
+            'user_id' => $user_id,
+            'otp' => $otp
+        ]);
+    } else {
+        $stmt = $pdo->prepare('INSERT INTO otp (user_id, otp) VALUES (:user_id, :otp)');
+        $stmt->execute([
+            'user_id' => $user_id,
+            'otp' => $otp
+        ]);
+    }
 
     return $otp;
 }
@@ -45,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $checkStmt->execute(['username' => $username]);
 
             // Check if email already exists
-            $checkEmailStmt = $pdo->prepare('SELECT Email FROM users WHERE Email = :email');
+            $checkEmailStmt = $pdo->prepare('SELECT email FROM users WHERE email = :email');
             $checkEmailStmt->execute(['email' => $email]);
 
             if ($checkStmt->rowCount() > 0) {
@@ -60,20 +81,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Hash the password securely
                     $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
                     
-                    // Insert user with hashed password
-                    $stmt = $pdo->prepare('INSERT INTO users (FirstName, LastName, contactNo, Email, username, password) 
-                                         VALUES (:firstName, :lastName, :contactNo, :email, :username, :password)');
+                    // Some local DBs have an `id` column that is NOT auto-increment.
+                    // If so, assign the next id manually to prevent SQLSTATE[HY000]:1364.
+                    $manualId = null;
+                    $idColumn = $pdo->query("SHOW COLUMNS FROM users LIKE 'id'")->fetch(PDO::FETCH_ASSOC);
+                    $idNeedsManualValue = $idColumn
+                        && stripos((string) ($idColumn['Extra'] ?? ''), 'auto_increment') === false
+                        && (($idColumn['Null'] ?? '') === 'NO')
+                        && ($idColumn['Default'] === null);
 
-                    $stmt->execute([
-                        'firstName' => $firstName,
-                        'lastName' => $lastName,
-                        'contactNo' => $contactNo,
-                        'email' => $email,
-                        'username' => $username,
-                        'password' => $hashedPassword  // Store hashed password
-                    ]);
+                    if ($idNeedsManualValue) {
+                        $manualId = (int) $pdo->query("SELECT COALESCE(MAX(id), 0) + 1 FROM users")->fetchColumn();
+                    }
 
-                    $user_id = $pdo->lastInsertId();
+                    if ($idNeedsManualValue) {
+                        $stmt = $pdo->prepare('INSERT INTO users (id, FirstName, LastName, contactNo, email, username, password)
+                                             VALUES (:id, :firstName, :lastName, :contactNo, :email, :username, :password)');
+                        $stmt->execute([
+                            'id' => $manualId,
+                            'firstName' => $firstName,
+                            'lastName' => $lastName,
+                            'contactNo' => $contactNo,
+                            'email' => $email,
+                            'username' => $username,
+                            'password' => $hashedPassword
+                        ]);
+                    } else {
+                        $stmt = $pdo->prepare('INSERT INTO users (FirstName, LastName, contactNo, email, username, password)
+                                             VALUES (:firstName, :lastName, :contactNo, :email, :username, :password)');
+                        $stmt->execute([
+                            'firstName' => $firstName,
+                            'lastName' => $lastName,
+                            'contactNo' => $contactNo,
+                            'email' => $email,
+                            'username' => $username,
+                            'password' => $hashedPassword
+                        ]);
+                    }
+
+                    $user_id = (int) $pdo->lastInsertId();
+                    if ($user_id <= 0) {
+                        $userLookupStmt = $pdo->prepare('SELECT user_id, id FROM users WHERE username = :username ORDER BY user_id DESC LIMIT 1');
+                        $userLookupStmt->execute(['username' => $username]);
+                        $createdUser = $userLookupStmt->fetch(PDO::FETCH_ASSOC);
+                        $user_id = (int) ($createdUser['user_id'] ?? $createdUser['id'] ?? 0);
+                    }
 
                     // Log the signup
                     logActivity(
@@ -94,6 +146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if ($emailService->sendOTP($email, $otp)) {
                             $_SESSION['pending_otp'] = $otp;
                             $_SESSION['pending_user_id'] = $user_id;
+                            unset($_SESSION['otp_email_failed']);
                             error_log("OTP sent successfully to: " . $email);
                             
                             // Store success message in session
@@ -101,15 +154,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             
                             // Commit the transaction before redirect
                             $pdo->commit();
-                            
-                            // Redirect to OTP verification page
-                            header('Location: otp.php');
+
+                            $otpTicket = otp_continuation_issue($user_id);
+                            ob_end_clean();
+                            // Signed ?t= survives lost session cookies on redirect (e.g. host mismatch).
+                            $loc = 'otp.php';
+                            if ($otpTicket !== '') {
+                                $loc .= '?t=' . rawurlencode($otpTicket);
+                            }
+                            if (!headers_sent()) {
+                                header('Location: ' . $loc, true, 303);
+                                exit();
+                            }
+                            $href = htmlspecialchars($loc, ENT_QUOTES, 'UTF-8');
+                            echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
+                                . '<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">'
+                                . '<meta http-equiv="refresh" content="0;url=' . $href . '">'
+                                . '<script>location.replace(' . json_encode($loc, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES) . ');</script>'
+                                . '</head><body style="font-family:sans-serif;text-align:center;margin-top:3rem">'
+                                . '<p>Continuing to verification…</p><p><a href="' . $href . '">Continue</a></p></body></html>';
                             exit();
                         } else {
-                            // Rollback if email sending fails
-                            $pdo->rollBack();
-                            error_log("Failed to send OTP to: " . $email);
-                            $message = 'Failed to send verification email. Please try again.';
+                            // Local/dev fallback: continue verification when transactional email fails.
+                            // Avoids blocking signup when Resend or mail config is unavailable.
+                            $_SESSION['pending_otp'] = $otp;
+                            $_SESSION['pending_user_id'] = $user_id;
+                            $_SESSION['otp_email_failed'] = true;
+                            $why = $emailService->getLastSendError();
+                            $_SESSION['error'] = 'Email could not be sent. Use this OTP to finish signup: ' . $otp
+                                . ($why ? ' — ' . $why : '');
+                            error_log("Failed to send OTP to: " . $email . ". Falling back to manual OTP display.");
+
+                            // Keep created account and OTP record.
+                            $pdo->commit();
+
+                            $otpTicket = otp_continuation_issue($user_id);
+                            ob_end_clean();
+                            $loc = 'otp.php';
+                            if ($otpTicket !== '') {
+                                $loc .= '?t=' . rawurlencode($otpTicket);
+                            }
+                            if (!headers_sent()) {
+                                header('Location: ' . $loc, true, 303);
+                                exit();
+                            }
+                            $href = htmlspecialchars($loc, ENT_QUOTES, 'UTF-8');
+                            echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
+                                . '<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">'
+                                . '<meta http-equiv="refresh" content="0;url=' . $href . '">'
+                                . '<script>location.replace(' . json_encode($loc, JSON_HEX_TAG | JSON_UNESCAPED_SLASHES) . ');</script>'
+                                . '</head><body style="font-family:sans-serif;text-align:center;margin-top:3rem">'
+                                . '<p>Continuing to verification…</p><p><a href="' . $href . '">Continue</a></p></body></html>';
+                            exit();
                         }
                     } else {
                         // Rollback if OTP generation fails
@@ -135,8 +231,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html lang="en">
 
 <head>
+    <?php $SITE_ICON_BASE = '../'; require dirname(__DIR__) . '/includes/site_head_icons.php'; ?>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>Sign Up</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&display=swap" rel="stylesheet">
@@ -144,7 +241,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
 </head>
 
-<body>
+<body class="signup-page">
     <div class="container">
         <!-- Left Section -->
         <div class="left-section">

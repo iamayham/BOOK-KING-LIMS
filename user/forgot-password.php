@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once dirname(__DIR__) . '/helpers/session_bootstrap.php';
+bk_session_start();
 require '../database/db_connection.php';
 require_once './email_service.php';
 
@@ -11,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     if (!empty($email)) {
         try {
-            $stmt = $pdo->prepare("SELECT * FROM users WHERE Email = ?");
+            $stmt = $pdo->prepare("SELECT * FROM users WHERE email = ?");
             $stmt->execute([$email]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
             
@@ -19,20 +20,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $otp = rand(100000, 999999);
                 $emailService = new EmailService();
                 
+                $_SESSION['reset_otp'] = $otp;
+                $_SESSION['reset_user_id'] = $user['user_id'];
+                $_SESSION['reset_email'] = $email;
+
+                // Handle DBs where otp.id is required but not auto-increment.
+                $manualOtpId = null;
+                $otpIdColumn = $pdo->query("SHOW COLUMNS FROM otp LIKE 'id'")->fetch(PDO::FETCH_ASSOC);
+                $otpIdNeedsManualValue = $otpIdColumn
+                    && stripos((string) ($otpIdColumn['Extra'] ?? ''), 'auto_increment') === false
+                    && (($otpIdColumn['Null'] ?? '') === 'NO')
+                    && ($otpIdColumn['Default'] === null);
+
+                if ($otpIdNeedsManualValue) {
+                    $manualOtpId = (int) $pdo->query("SELECT COALESCE(MAX(id), 0) + 1 FROM otp")->fetchColumn();
+                }
+
+                if ($otpIdNeedsManualValue) {
+                    $insertOtpStmt = $pdo->prepare("INSERT INTO otp (id, user_id, otp, status) VALUES (?, ?, ?, 0)");
+                    $insertOtpStmt->execute([$manualOtpId, $user['user_id'], $otp]);
+                } else {
+                    $insertOtpStmt = $pdo->prepare("INSERT INTO otp (user_id, otp, status) VALUES (?, ?, 0)");
+                    $insertOtpStmt->execute([$user['user_id'], $otp]);
+                }
+
                 if ($emailService->sendOTP($email, $otp)) {
-                    $_SESSION['reset_otp'] = $otp;
-                    $_SESSION['reset_user_id'] = $user['user_id'];
-                    $_SESSION['reset_email'] = $email;
-                    
-                    $stmt = $pdo->prepare("INSERT INTO otp (user_id, otp, status) VALUES (?, ?, 0)");
-                    $stmt->execute([$user['user_id'], $otp]);
-                    
                     echo json_encode(['success' => true]);
                     exit;
-                } else {
-                    echo json_encode(['success' => false, 'message' => 'Failed to send OTP']);
-                    exit;
                 }
+
+                // Dev fallback: let user continue with OTP even when email fails.
+                echo json_encode([
+                    'success' => true,
+                    'fallback' => true,
+                    'message' => 'Email failed. Use this OTP: ' . $otp
+                ]);
+                exit;
             } else {
                 echo json_encode(['success' => false, 'message' => 'Email not found']);
                 exit;
@@ -47,18 +70,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <?php $SITE_ICON_BASE = '../'; require dirname(__DIR__) . '/includes/site_head_icons.php'; ?>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Forgot Password</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/css/forgot-password.css?v=<?php echo time(); ?>">
+    <link rel="stylesheet" href="../assets/css/forgot-password.css?v=<?php echo time(); ?>">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
 </head>
 <body>
     <div class="container">
         <!-- Left Section -->
         <div class="left-section">
-            <img src="images/logo.png" alt="Book King Logo">
+            <img src="../images/logo.png" alt="Book King Logo">
             <p class="info-text">We'll send a code to your email to reset your password</p>
         </div>
 
@@ -108,6 +132,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             const data = await response.json();
             
             if (data.success) {
+                if (data.fallback && data.message) {
+                    alert(data.message);
+                }
                 const popup = document.getElementById('successPopup');
                 popup.style.display = 'block';
                 

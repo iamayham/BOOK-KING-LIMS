@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once dirname(__DIR__, 2) . '/helpers/session_bootstrap.php';
+bk_session_start();
 require_once '../../helpers/activity_logger.php';
 
 // Include the database connection
