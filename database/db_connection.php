@@ -2,31 +2,40 @@
 // database/db_connection.php
 
 try {
-    // First, connect without specifying the database
+    $dbHost = getenv('DB_HOST') ?: 'localhost';
+    $dbPort = getenv('DB_PORT') ?: '3306';
+    $dbName = getenv('DB_NAME') ?: 'lims';
+    $dbUser = getenv('DB_USER') ?: 'root';
+    $dbPass = getenv('DB_PASS');
+    if ($dbPass === false) {
+        $dbPass = '';
+    }
+
+    $pdoOptions = [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+    ];
+
+    $isLocalDefaults = $dbHost === 'localhost' && $dbUser === 'root' && $dbName === 'lims';
+    if ($isLocalDefaults) {
+        // Local dev convenience: ensure the database exists.
+        $bootstrapPdo = new PDO(
+            "mysql:host={$dbHost};port={$dbPort};charset=utf8mb4",
+            $dbUser,
+            $dbPass,
+            $pdoOptions
+        );
+        $bootstrapPdo->exec("CREATE DATABASE IF NOT EXISTS `{$dbName}`");
+    }
+
+    // Main app connection (works for Railway and local).
     $pdo = new PDO(
-        "mysql:host=localhost",
-        "root",
-        "",
-        [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
-        ]
+        "mysql:host={$dbHost};port={$dbPort};dbname={$dbName};charset=utf8mb4",
+        $dbUser,
+        $dbPass,
+        $pdoOptions
     );
-    
-    // Create database if it doesn't exist
-    $pdo->exec("CREATE DATABASE IF NOT EXISTS lims");
-    
-    // Connect to the specific database
-    $pdo = new PDO(
-        "mysql:host=localhost;dbname=lims;charset=utf8mb4",
-        "root",
-        "",
-        [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
-        ]
-    );
-    
+
     // Create admin table if it doesn't exist
     $pdo->exec("CREATE TABLE IF NOT EXISTS admin (
         admin_id INT AUTO_INCREMENT PRIMARY KEY,
