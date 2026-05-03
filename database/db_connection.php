@@ -2,12 +2,29 @@
 declare(strict_types=1);
 
 // database/db_connection.php
+$isRailwayRuntime = getenv('RAILWAY_ENVIRONMENT') !== false
+    || getenv('RAILWAY_PROJECT_ID') !== false
+    || getenv('PORT') !== false;
+
 $railwayHost = trim((string) (getenv('MYSQLHOST') ?: ''));
 $railwayPort = trim((string) (getenv('MYSQLPORT') ?: ''));
 $railwayDb = trim((string) (getenv('MYSQLDATABASE') ?: ''));
 $railwayUser = trim((string) (getenv('MYSQLUSER') ?: ''));
 $railwayPass = getenv('MYSQLPASSWORD');
 $railwayPass = $railwayPass === false ? '' : (string) $railwayPass;
+
+// Optional Railway single URL fallback: mysql://user:pass@host:port/db
+$mysqlUrl = trim((string) (getenv('MYSQL_URL') ?: ''));
+if (($railwayHost === '' || $railwayPort === '' || $railwayDb === '' || $railwayUser === '' || $railwayPass === '') && $mysqlUrl !== '') {
+    $parts = parse_url($mysqlUrl);
+    if (is_array($parts)) {
+        $railwayHost = $railwayHost !== '' ? $railwayHost : (string) ($parts['host'] ?? '');
+        $railwayPort = $railwayPort !== '' ? $railwayPort : (string) ($parts['port'] ?? '');
+        $railwayDb = $railwayDb !== '' ? $railwayDb : ltrim((string) ($parts['path'] ?? ''), '/');
+        $railwayUser = $railwayUser !== '' ? $railwayUser : (string) ($parts['user'] ?? '');
+        $railwayPass = $railwayPass !== '' ? $railwayPass : (string) ($parts['pass'] ?? '');
+    }
+}
 
 $hasRailwayConfig = $railwayHost !== ''
     && $railwayPort !== ''
@@ -25,6 +42,9 @@ if ($hasRailwayConfig) {
         'pass' => $railwayPass,
     ];
 } else {
+    if ($isRailwayRuntime) {
+        throw new RuntimeException('Environment variables not loaded');
+    }
     // Local fallback for localhost:8000 development.
     $config = [
         'host' => 'localhost',
