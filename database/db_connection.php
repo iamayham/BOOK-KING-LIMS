@@ -2,11 +2,17 @@
 // database/db_connection.php
 
 try {
-    $dbHost = getenv('DB_HOST') ?: 'localhost';
-    $dbPort = getenv('DB_PORT') ?: '3306';
-    $dbName = getenv('DB_NAME') ?: 'lims';
-    $dbUser = getenv('DB_USER') ?: 'root';
+    $dbHost = getenv('DB_HOST') ?: getenv('MYSQLHOST') ?: 'localhost';
+    $dbPort = getenv('DB_PORT') ?: getenv('MYSQLPORT') ?: '3306';
+    $dbName = getenv('DB_NAME') ?: getenv('MYSQLDATABASE') ?: getenv('MYSQL_DATABASE') ?: 'lims';
+    $dbUser = getenv('DB_USER') ?: getenv('MYSQLUSER') ?: 'root';
     $dbPass = getenv('DB_PASS');
+    if ($dbPass === false || $dbPass === '') {
+        $dbPass = getenv('MYSQLPASSWORD');
+    }
+    if ($dbPass === false || $dbPass === '') {
+        $dbPass = getenv('MYSQL_ROOT_PASSWORD');
+    }
     if ($dbPass === false) {
         $dbPass = '';
     }
