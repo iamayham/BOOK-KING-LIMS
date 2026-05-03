@@ -1,4 +1,4 @@
-const CACHE_NAME = 'book-king-shell-v2';
+const CACHE_NAME = 'book-king-shell-v3';
 const PRECACHE_URLS = [
   '/',
   '/index.php',
@@ -30,11 +30,17 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
+  const url = new URL(request.url);
+
+  // Never intercept API/handler endpoints (POST bodies, JSON, credentials).
+  if (url.pathname.includes('/handlers/')) {
+    return;
+  }
+
   if (request.method !== 'GET') {
     return;
   }
 
-  const url = new URL(request.url);
   if (url.origin !== self.location.origin) {
     return;
   }
