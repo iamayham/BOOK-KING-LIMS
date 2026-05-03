@@ -1,7 +1,7 @@
 <?php
 require_once dirname(__DIR__) . '/helpers/session_bootstrap.php';
 bk_session_start();
-require '../database/db_connection.php';
+$pdo = require '../database/db_connection.php';
 
 if (!isset($_SESSION['reset_user_id'])) {
     header('Location: forgot-password.php');
