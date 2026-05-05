@@ -8,7 +8,17 @@ class EmailService
     private string $fromEmail;
     private string $fromName;
 
-    /** Brevo SMTP */
+    /** Selected mail driver (brevo|smtp) */
+    private string $mailDriver;
+
+    /** Generic SMTP settings (used by MAIL_DRIVER=smtp) */
+    private string $smtpHost;
+    private int $smtpPort;
+    private string $smtpUsername;
+    private string $smtpPassword;
+    private string $smtpEncryption;
+
+    /** Brevo SMTP fallback when MAIL_DRIVER=brevo */
     private string $brevoSmtpHost;
     private int $brevoSmtpPort;
     private string $brevoSmtpLogin;
@@ -27,6 +37,14 @@ class EmailService
         if ($this->fromEmail === '') {
             $this->fromEmail = 'noreply@bookking.online';
         }
+
+        $this->mailDriver = strtolower($this->envFirst('MAIL_DRIVER') ?: 'brevo');
+
+        $this->smtpHost = $this->envFirst('MAIL_HOST', 'SMTP_HOST');
+        $this->smtpPort = (int) (($p = $this->envFirst('MAIL_PORT', 'SMTP_PORT')) !== '' ? $p : '587');
+        $this->smtpUsername = $this->envFirst('MAIL_USERNAME', 'SMTP_USERNAME');
+        $this->smtpPassword = $this->envFirst('MAIL_PASSWORD', 'SMTP_PASSWORD');
+        $this->smtpEncryption = strtolower($this->envFirst('MAIL_ENCRYPTION', 'SMTP_ENCRYPTION') ?: 'tls');
 
         $this->brevoSmtpLogin = $this->envFirst('BREVO_SMTP_LOGIN');
         $this->brevoSmtpPassword = $this->envFirst('BREVO_SMTP_KEY', 'BREVO_SMTP_PASSWORD');
@@ -131,7 +149,65 @@ class EmailService
     public function sendOTP($recipientEmail, $otp): bool
     {
         $this->lastSendError = null;
+
+        if ($this->mailDriver === 'smtp') {
+            return $this->sendOtpViaSmtp((string) $recipientEmail, (string) $otp);
+        }
+
         return $this->sendOtpViaBrevo((string) $recipientEmail, (string) $otp);
+    }
+
+    private function sendOtpViaSmtp(string $recipientEmail, string $otp): bool
+    {
+        $this->lastSendError = null;
+
+        if ($this->smtpHost === '' || $this->smtpUsername === '' || $this->smtpPassword === '') {
+            $this->lastSendError = 'Mail not configured: set MAIL_HOST, MAIL_USERNAME, MAIL_PASSWORD for MAIL_DRIVER=smtp';
+            return false;
+        }
+
+        $autoload = dirname(__DIR__) . '/vendor/autoload.php';
+        if (!is_readable($autoload)) {
+            $this->lastSendError = 'Composer vendor/autoload.php missing (needed for PHPMailer / SMTP).';
+            return false;
+        }
+
+        try {
+            require_once $autoload;
+
+            $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+            $mail->isSMTP();
+            $mail->Host = $this->smtpHost;
+            $mail->SMTPAuth = true;
+            $mail->Username = $this->smtpUsername;
+            $mail->Password = $this->smtpPassword;
+            $mail->SMTPSecure = $this->smtpEncryption === 'ssl'
+                ? PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS
+                : PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Port = $this->smtpPort > 0 ? $this->smtpPort : 587;
+            $mail->CharSet = 'UTF-8';
+            $mail->Timeout = 15;
+            $mail->Timelimit = 20;
+            $mail->SMTPKeepAlive = false;
+
+            $mail->setFrom($this->fromEmail, $this->fromName);
+            $mail->addAddress($recipientEmail);
+            $mail->Subject = 'Your OTP Code';
+            $mail->isHTML(true);
+            $mail->Body = '<p>Your verification code is: <b>' . htmlspecialchars($otp, ENT_QUOTES, 'UTF-8') . '</b></p>';
+            $mail->AltBody = 'Your verification code is: ' . $otp;
+
+            $mail->send();
+            return true;
+        } catch (PHPMailer\PHPMailer\Exception $e) {
+            $this->lastSendError = 'SMTP: ' . $e->getMessage();
+            error_log($this->lastSendError);
+            return false;
+        } catch (Throwable $e) {
+            $this->lastSendError = 'SMTP: ' . $e->getMessage();
+            error_log($this->lastSendError);
+            return false;
+        }
     }
 
     /**
