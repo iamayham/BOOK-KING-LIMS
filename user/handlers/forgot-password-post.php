@@ -79,12 +79,13 @@ try {
         exit;
     }
 
-    error_log('forgot-password email send failed: ' . ($emailService->getLastSendError() ?? 'unknown'));
+    $sendWhy = $emailService->getLastSendError() ?? 'unknown';
+    error_log('forgot-password email send failed: ' . $sendWhy);
 
     echo json_encode([
         'success' => true,
         'fallback' => true,
-        'message' => 'Email failed. Use this OTP: ' . $otp,
+        'message' => 'Email failed. Use this OTP: ' . $otp . ' — ' . $sendWhy,
     ]);
     exit;
 } catch (Throwable $e) {
