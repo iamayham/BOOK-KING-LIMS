@@ -34,17 +34,20 @@ class EmailService
         $this->fromEmail = $this->envFirst('MAIL_FROM_EMAIL', 'BREVO_FROM_EMAIL');
         $this->fromName = $this->envFirst('MAIL_FROM_NAME', 'BREVO_FROM_NAME') ?: 'Book King';
 
-        if ($this->fromEmail === '') {
-            $this->fromEmail = 'noreply@bookking.online';
-        }
-
         $this->mailDriver = strtolower($this->envFirst('MAIL_DRIVER') ?: 'brevo');
 
         $this->smtpHost = $this->envFirst('MAIL_HOST', 'SMTP_HOST');
         $this->smtpPort = (int) (($p = $this->envFirst('MAIL_PORT', 'SMTP_PORT')) !== '' ? $p : '587');
         $this->smtpUsername = $this->envFirst('MAIL_USERNAME', 'SMTP_USERNAME');
-        $this->smtpPassword = $this->envFirst('MAIL_PASSWORD', 'SMTP_PASSWORD');
+        $this->smtpPassword = preg_replace('/\s+/', '', $this->envFirst('MAIL_PASSWORD', 'SMTP_PASSWORD')) ?: '';
         $this->smtpEncryption = strtolower($this->envFirst('MAIL_ENCRYPTION', 'SMTP_ENCRYPTION') ?: 'tls');
+
+        if ($this->fromEmail === '') {
+            // Gmail SMTP rejects untrusted From addresses; default to authenticated account.
+            $this->fromEmail = $this->mailDriver === 'smtp' && $this->smtpUsername !== ''
+                ? $this->smtpUsername
+                : 'noreply@bookking.online';
+        }
 
         $this->brevoSmtpLogin = $this->envFirst('BREVO_SMTP_LOGIN');
         $this->brevoSmtpPassword = $this->envFirst('BREVO_SMTP_KEY', 'BREVO_SMTP_PASSWORD');
