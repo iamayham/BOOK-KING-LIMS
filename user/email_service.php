@@ -175,19 +175,51 @@ class EmailService
             return false;
         }
 
-        try {
-            require_once $autoload;
+        require_once $autoload;
 
+        $attempts = [[
+            'port' => $this->smtpPort > 0 ? $this->smtpPort : 587,
+            'encryption' => $this->smtpEncryption === 'ssl' ? 'ssl' : 'tls',
+        ]];
+
+        // Gmail/Railway interoperability fallback: try both STARTTLS and SMTPS.
+        if (strcasecmp($this->smtpHost, 'smtp.gmail.com') === 0) {
+            $attempts[] = ['port' => 587, 'encryption' => 'tls'];
+            $attempts[] = ['port' => 465, 'encryption' => 'ssl'];
+        }
+
+        $attempts = array_values(array_unique($attempts, SORT_REGULAR));
+        $errors = [];
+
+        foreach ($attempts as $attempt) {
+            if ($this->sendOtpViaSmtpAttempt(
+                $recipientEmail,
+                $otp,
+                (int) $attempt['port'],
+                (string) $attempt['encryption']
+            )) {
+                return true;
+            }
+            $errors[] = (string) ($this->lastSendError ?? 'SMTP send failed');
+        }
+
+        $this->lastSendError = implode(' | ', array_values(array_unique(array_filter($errors))));
+        return false;
+    }
+
+    private function sendOtpViaSmtpAttempt(string $recipientEmail, string $otp, int $port, string $encryption): bool
+    {
+        try {
             $mail = new PHPMailer\PHPMailer\PHPMailer(true);
             $mail->isSMTP();
             $mail->Host = $this->smtpHost;
             $mail->SMTPAuth = true;
             $mail->Username = $this->smtpUsername;
             $mail->Password = $this->smtpPassword;
-            $mail->SMTPSecure = $this->smtpEncryption === 'ssl'
+            $mail->SMTPSecure = $encryption === 'ssl'
                 ? PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS
                 : PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
-            $mail->Port = $this->smtpPort > 0 ? $this->smtpPort : 587;
+            $mail->Port = $port > 0 ? $port : 587;
             $mail->CharSet = 'UTF-8';
             $mail->Timeout = 15;
             $mail->Timelimit = 20;
@@ -203,11 +235,11 @@ class EmailService
             $mail->send();
             return true;
         } catch (PHPMailer\PHPMailer\Exception $e) {
-            $this->lastSendError = 'SMTP: ' . $e->getMessage();
+            $this->lastSendError = 'SMTP ' . $this->smtpHost . ':' . $port . '/' . $encryption . ': ' . $e->getMessage();
             error_log($this->lastSendError);
             return false;
         } catch (Throwable $e) {
-            $this->lastSendError = 'SMTP: ' . $e->getMessage();
+            $this->lastSendError = 'SMTP ' . $this->smtpHost . ':' . $port . '/' . $encryption . ': ' . $e->getMessage();
             error_log($this->lastSendError);
             return false;
         }
