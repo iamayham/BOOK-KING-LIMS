@@ -61,7 +61,8 @@ bk_session_start();
         try {
             const formData = new FormData(this);
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 20000);
+            // SMTP on production can take longer, especially with multi-transport fallback attempts.
+            const timeoutId = setTimeout(() => controller.abort(), 60000);
             const response = await fetch('handlers/forgot-password-post.php', {
                 method: 'POST',
                 body: formData,
