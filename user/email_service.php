@@ -8,7 +8,7 @@ class EmailService
     private string $fromEmail;
     private string $fromName;
 
-    /** Selected mail driver (mailersend|smtp) */
+    /** Selected mail driver (brevo|mailersend|smtp) */
     private string $mailDriver;
 
     /** Generic SMTP settings (used by MAIL_DRIVER=smtp) */
@@ -28,7 +28,7 @@ class EmailService
         $this->fromEmail = $this->envFirst('MAIL_FROM_EMAIL');
         $this->fromName = $this->envFirst('MAIL_FROM_NAME') ?: 'Book King';
 
-        $this->mailDriver = strtolower($this->envFirst('MAIL_DRIVER') ?: 'mailersend');
+        $this->mailDriver = strtolower($this->envFirst('MAIL_DRIVER') ?: 'brevo');
 
         $this->smtpHost = $this->envFirst('MAIL_HOST', 'SMTP_HOST');
         $this->smtpPort = (int) (($p = $this->envFirst('MAIL_PORT', 'SMTP_PORT')) !== '' ? $p : '587');
@@ -145,6 +145,10 @@ class EmailService
             return $this->sendOtpViaMailerSend((string) $recipientEmail, (string) $otp);
         }
 
+        if ($this->mailDriver === 'brevo') {
+            return $this->sendOtpViaBrevo((string) $recipientEmail, (string) $otp);
+        }
+
         if ($this->mailDriver === 'smtp') {
             if ($this->sendOtpViaSmtp((string) $recipientEmail, (string) $otp)) {
                 return true;
@@ -154,7 +158,107 @@ class EmailService
             return false;
         }
 
-        $this->lastSendError = 'Unsupported MAIL_DRIVER. Use mailersend or smtp.';
+        $this->lastSendError = 'Unsupported MAIL_DRIVER. Use brevo, mailersend or smtp.';
+        return false;
+    }
+
+    /**
+     * Brevo transactional API delivery.
+     *
+     * @see https://developers.brevo.com/reference/sendtransacemail
+     */
+    private function sendOtpViaBrevo(string $recipientEmail, string $otp): bool
+    {
+        $this->lastSendError = null;
+
+        $apiKey = $this->envFirst('BREVO_API_KEY', 'BREVO_TRANSACTIONAL_API_KEY', 'BREVO_V3_API_KEY');
+        if ($apiKey === '') {
+            $this->lastSendError = 'Brevo not configured: set BREVO_API_KEY';
+            return false;
+        }
+
+        $payload = [
+            'sender' => ['name' => $this->fromName, 'email' => $this->fromEmail],
+            'to' => [['email' => $recipientEmail]],
+            'subject' => 'Your OTP Code',
+            'htmlContent' => '<p>Your verification code is: <b>' . htmlspecialchars($otp, ENT_QUOTES, 'UTF-8') . '</b></p>',
+            'textContent' => 'Your verification code is: ' . $otp,
+        ];
+        $body = json_encode($payload);
+        if ($body === false) {
+            $this->lastSendError = 'Brevo API: could not encode request';
+            return false;
+        }
+
+        $endpoint = $this->envFirst('BREVO_API_URL') ?: 'https://api.brevo.com/v3/smtp/email';
+        $headerLines = [
+            'api-key: ' . $apiKey,
+            'Content-Type: application/json',
+            'Accept: application/json',
+        ];
+
+        if (function_exists('curl_init')) {
+            $ch = curl_init($endpoint);
+            if ($ch === false) {
+                $this->lastSendError = 'Brevo API: curl_init failed';
+                return false;
+            }
+
+            curl_setopt_array($ch, [
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => $body,
+                CURLOPT_HTTPHEADER => $headerLines,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_TIMEOUT => 25,
+                CURLOPT_CONNECTTIMEOUT => 12,
+            ]);
+            $response = curl_exec($ch);
+            $curlErr = curl_error($ch);
+            $code = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+            curl_close($ch);
+
+            if ($response === false && $curlErr !== '') {
+                $this->lastSendError = 'Brevo API network: ' . $curlErr;
+                error_log($this->lastSendError);
+                return false;
+            }
+
+            if ($code >= 200 && $code < 300) {
+                return true;
+            }
+
+            $snippet = ($response !== false && $response !== '') ? substr((string) $response, 0, 1500) : '';
+            $this->lastSendError = 'Brevo API HTTP ' . $code . ($snippet !== '' ? (': ' . $snippet) : '');
+            error_log($this->lastSendError);
+            return false;
+        }
+
+        $ctx = stream_context_create([
+            'http' => [
+                'method' => 'POST',
+                'header' => implode("\r\n", $headerLines) . "\r\n",
+                'content' => $body,
+                'timeout' => 20,
+                'ignore_errors' => true,
+            ],
+        ]);
+
+        $response = @file_get_contents($endpoint, false, $ctx);
+        $status = 0;
+        $rh = isset($http_response_header) && is_array($http_response_header) ? $http_response_header : [];
+        if (!empty($rh[0]) && preg_match('#\s(\d{3})\s#', $rh[0], $m)) {
+            $status = (int) $m[1];
+        }
+        if ($status >= 200 && $status < 300) {
+            return true;
+        }
+
+        $this->lastSendError = 'Brevo API HTTP ' . $status . ($response !== false && $response !== '' ? (': ' . substr((string) $response, 0, 280)) : '');
+        if ($status === 0 && $response === false) {
+            $this->lastSendError = 'Brevo API: request failed (check allow_url_fopen / TLS)';
+        }
+        error_log($this->lastSendError);
         return false;
     }
 
