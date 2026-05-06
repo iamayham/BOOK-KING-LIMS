@@ -519,6 +519,37 @@ try {
                             </div>
                         </form>
                     </div>
+
+                    <div style="border-top: 1px solid #eee; margin: 20px 0;"></div>
+
+                    <div class="danger-zone-section">
+                        <h3>Danger Zone</h3>
+                        <p class="danger-zone-copy">Deleting your account is permanent and cannot be undone.</p>
+                        <button type="button" class="danger-btn" onclick="openDeleteAccountModal()">Delete Account</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="deleteAccountModal" class="modal">
+            <div class="modal-content delete-modal-content">
+                <div class="modal-header">
+                    <h2>Delete Account</h2>
+                    <span class="close" onclick="closeDeleteAccountModal()">×</span>
+                </div>
+                <div class="settings-form-container">
+                    <p class="delete-warning-text">Delete your account permanently? This cannot be undone.</p>
+                    <div class="form-group">
+                        <label for="deleteConfirmPassword">Current Password</label>
+                        <div class="input-container">
+                            <input type="password" id="deleteConfirmPassword" placeholder="Enter current password" required>
+                            <i class="fa-regular fa-eye-slash toggle-password" onclick="togglePassword('deleteConfirmPassword', this)"></i>
+                        </div>
+                    </div>
+                    <div class="button-group">
+                        <button type="button" class="cancel-btn" onclick="closeDeleteAccountModal()">Cancel</button>
+                        <button type="button" class="danger-btn" onclick="deleteAccount()">Delete Permanently</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -673,6 +704,55 @@ try {
                 });
 
                 return false;
+            }
+
+            function openDeleteAccountModal() {
+                const modal = document.getElementById('deleteAccountModal');
+                const passwordInput = document.getElementById('deleteConfirmPassword');
+                if (passwordInput) {
+                    passwordInput.value = '';
+                }
+                if (modal) {
+                    modal.classList.add('show');
+                }
+            }
+
+            function closeDeleteAccountModal() {
+                const modal = document.getElementById('deleteAccountModal');
+                if (modal) {
+                    modal.classList.remove('show');
+                }
+            }
+
+            async function deleteAccount() {
+                const passwordInput = document.getElementById('deleteConfirmPassword');
+                const password = passwordInput ? passwordInput.value : '';
+                if (password.trim() === '') {
+                    showNotification('Password is required to delete your account', 'error');
+                    return;
+                }
+
+                try {
+                    const formData = new FormData();
+                    formData.append('delete_account', '1');
+                    formData.append('currentPassword', password);
+
+                    const response = await fetch('update_user_settings.php', {
+                        method: 'POST',
+                        body: formData,
+                    });
+                    const data = await response.json();
+
+                    if (!data.success) {
+                        showNotification(data.error || 'Failed to delete account', 'error');
+                        return;
+                    }
+
+                    window.location.href = data.redirect || '../index.php';
+                } catch (error) {
+                    console.error('Error:', error);
+                    showNotification('An error occurred while deleting account', 'error');
+                }
             }
         </script>
     </div>

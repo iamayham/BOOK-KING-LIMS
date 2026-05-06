@@ -2,10 +2,12 @@
 require_once dirname(__DIR__) . '/helpers/session_bootstrap.php';
 bk_session_start();
 require '../database/db_connection.php';
+header('Content-Type: application/json; charset=UTF-8');
 
 // Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
-    header('Location: index.php');
+    http_response_code(401);
+    echo json_encode(['success' => false, 'error' => 'Not authenticated']);
     exit();
 }
 
@@ -103,6 +105,58 @@ if (isset($_POST['currentPassword']) && isset($_POST['newPassword'])) {
     } catch (PDOException $e) {
         error_log("Password update error: " . $e->getMessage());
         echo json_encode(['success' => false, 'error' => 'Database error occurred']);
+    }
+    exit;
+}
+
+// Handle account deletion
+if (isset($_POST['delete_account'])) {
+    try {
+        $currentPassword = trim((string) ($_POST['currentPassword'] ?? ''));
+        if ($currentPassword === '') {
+            echo json_encode(['success' => false, 'error' => 'Current password is required']);
+            exit;
+        }
+
+        $stmt = $pdo->prepare("SELECT password, profile_picture FROM users WHERE user_id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$user || !password_verify($currentPassword, (string) $user['password'])) {
+            echo json_encode(['success' => false, 'error' => 'Current password is incorrect']);
+            exit;
+        }
+
+        $pdo->beginTransaction();
+        $userId = (int) $_SESSION['user_id'];
+
+        $pdo->prepare('DELETE FROM otp WHERE user_id = ?')->execute([$userId]);
+        $pdo->prepare('DELETE FROM borrowed_books WHERE user_id = ?')->execute([$userId]);
+        $pdo->prepare('DELETE FROM users WHERE user_id = ?')->execute([$userId]);
+
+        $pdo->commit();
+
+        $currentPicture = (string) ($user['profile_picture'] ?? '');
+        if ($currentPicture !== '' && $currentPicture !== 'default.jpg') {
+            $filepath = '../uploads/profile_pictures/' . $currentPicture;
+            if (file_exists($filepath)) {
+                @unlink($filepath);
+            }
+        }
+
+        $_SESSION = [];
+        session_destroy();
+
+        echo json_encode([
+            'success' => true,
+            'redirect' => '../index.php',
+        ]);
+    } catch (Throwable $e) {
+        if (isset($pdo) && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log("Account deletion error: " . $e->getMessage());
+        echo json_encode(['success' => false, 'error' => 'Failed to delete account']);
     }
     exit;
 }
