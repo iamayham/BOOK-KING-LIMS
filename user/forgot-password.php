@@ -101,7 +101,10 @@ bk_session_start();
             if (error.name === 'AbortError') {
                 alert('Request timed out. Please try again.');
             } else {
-                alert('An error occurred. Please try again.');
+                const details = error && typeof error.message === 'string' && error.message.trim() !== ''
+                    ? error.message
+                    : 'Network request failed';
+                alert('Unable to reach the server: ' + details + '.');
             }
         }
     });
