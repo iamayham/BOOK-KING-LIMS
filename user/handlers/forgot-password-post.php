@@ -7,7 +7,8 @@ declare(strict_types=1);
  * and accidental output can't return a GET document instead of JSON.
  */
 
-ini_set('display_errors', '0');
+ini_set('display_errors', '1');
+error_reporting(E_ALL);
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     http_response_code(405);
@@ -90,6 +91,6 @@ try {
     exit;
 } catch (Throwable $e) {
     error_log('forgot-password-post: ' . $e->getMessage());
-    echo json_encode(['success' => false, 'message' => 'Database error']);
+    echo json_encode(['success' => false, 'message' => $e->getMessage()]);
     exit;
 }
